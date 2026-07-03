@@ -1,0 +1,99 @@
+name: Test packages
+
+on:
+  pull_request:
+
+concurrency:
+  group: test-packages-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.changes.outputs.packages }}
+      has_packages: ${{ steps.changes.outputs.has_packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed recipe versions
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || true)
+
+          CANDIDATES=$(echo "$CHANGED" \
+            | awk -F/ 'NF>=4 && length($1)==1 {print $1"/"$2"/"$3}' \
+            | sort -u)
+
+          EXISTING=""
+          for d in $CANDIDATES; do
+            if [ -d "$d" ] && [ -f "$d/CMakeLists.txt" ]; then
+              EXISTING="$EXISTING$d"$'\n'
+            fi
+          done
+
+          PACKAGES_JSON=$(printf '%s' "$EXISTING" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+          echo "packages=$PACKAGES_JSON" >> "$GITHUB_OUTPUT"
+          if [ "$PACKAGES_JSON" = "[]" ]; then
+            echo "has_packages=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_packages=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Changed recipe versions:"
+          printf '%s' "$EXISTING"
+
+  test-package:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has_packages == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse package name/version
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          IFS='/' read -r LETTER NAME VERSION <<< "${{ matrix.package }}"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Configure (fetch + build + test the recipe)
+        shell: bash
+        run: |
+          cmake -S ci/test-harness -B build \
+            -DSPM_TEST_PACKAGE_NAME="${{ steps.pkg.outputs.name }}" \
+            -DSPM_TEST_PACKAGE_VERSION="${{ steps.pkg.outputs.version }}" \
+            -DSPM_REMOTE=OFF
+
+      - name: Build (drives the recipe's isolated build)
+        shell: bash
+        run: cmake --build build --config Release
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spm-logs-${{ matrix.os }}-${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}
+          path: |
+            build/_spm/**/CMakeFiles/CMakeError.log
+            build/_spm/**/CMakeFiles/CMakeOutput.log
+          if-no-files-found: ignore
