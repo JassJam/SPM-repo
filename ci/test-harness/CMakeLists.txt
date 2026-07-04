@@ -8,7 +8,7 @@ if(NOT SPM_TEST_PACKAGE_VERSION)
 	message(FATAL_ERROR "SPM_TEST_PACKAGE_VERSION must be set (e.g. -DSPM_TEST_PACKAGE_VERSION=1.14.1)")
 endif()
 
-include(${CMAKE_CURRENT_LIST_DIR}/../../spm.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/spm.cmake)
 
 set(SPM_VERBOSE_OUTPUT ON CACHE BOOL "" FORCE)
 
