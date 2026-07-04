@@ -440,6 +440,18 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 
 	# --- Expose the cached, precompiled result as a CMake target -----------
 
+	# If the recipe has IMPORT.cmake, use it to import the recipe.
+	set(_import_script "${recipe_dir}/Import.cmake")
+	if(EXISTS "${_import_script}")
+		set(SPM_IMPORT_NAME "${_import_name}")
+		set(SPM_IMPORT_VERSION "${version}")
+		set(SPM_IMPORT_CACHE_DIR "${_cache_dir}")
+		set(SPM_IMPORT_SHARED "${_pkg_build_shared}")
+		_spm_log("Running IMPORT.cmake for '${name}@${version}'")
+		include("${_import_script}")
+		return()
+	endif()
+
 	find_package(${_import_name} QUIET CONFIG PATHS "${_cache_dir}" NO_DEFAULT_PATH)
 	if(${_import_name}_FOUND)
 		_spm_log("'${_import_name}' provides a CMake package config, imported via find_package()")
@@ -461,9 +473,8 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 			"If this package's real CMake package/target name differs from its recipe name "
 			"(e.g. the 'abseil' recipe installs as CMake package 'absl'), pass "
 			"IMPORT_NAME to spm_require_package() to point at the real name. If the package "
-			"exposes multiple component targets with no single unified library, this generic "
-			"single-library fallback doesn't apply — the recipe needs a proper installed "
-			"CMake package config instead.")
+			"exposes multiple component targets with no single unified library, add an "
+			"IMPORT.cmake file next to the recipe's CMakeLists.txt to handle it explicitly.")
 	endif()
 
 	if(_pkg_build_shared STREQUAL "ON")
@@ -580,15 +591,6 @@ function(spm_require_package)
 	endif()
 
 	_spm_log("Building & importing '${ARG_NAME}@${ARG_VERSION}' from ${_recipe_dir}")
-
-	if(NOT ARG_IMPORT_NAME AND EXISTS "${_recipe_dir}/IMPORT_NAME")
-		file(STRINGS "${_recipe_dir}/IMPORT_NAME" _import_name_from_file LIMIT_COUNT 1)
-		string(STRIP "${_import_name_from_file}" _import_name_from_file)
-		if(_import_name_from_file)
-			_spm_log("Recipe declares IMPORT_NAME '${_import_name_from_file}' via IMPORT_NAME file")
-			set(ARG_IMPORT_NAME "${_import_name_from_file}")
-		endif()
-	endif()
 
 	set(_run_tests_flag "")
 	if(ARG_RUN_TESTS)
