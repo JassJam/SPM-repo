@@ -20,6 +20,7 @@ set(SPM_CMAKE_INCLUDED TRUE)
 
 set(SPM_ROOT "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "Path to spm.cmake's directory")
 
+set(SPM_REMOTE ON CACHE BOOL "Fetch missing recipes from a registry")
 set(SPM_VERBOSE_OUTPUT OFF CACHE BOOL "Verbose SPM logging")
 
 # The registry is ONE of:
@@ -36,7 +37,7 @@ set(SPM_VERBOSE_OUTPUT OFF CACHE BOOL "Verbose SPM logging")
 # Detected automatically from the string's shape; see _spm_resolve_recipe_dir.
 #
 # TODO: replace with your actual file server URL, git repo, or mounted path.
-set(SPM_REGISTRY "git+https://codeberg.org/JassJam/SPM-repo.git" CACHE STRING
+set(SPM_REGISTRY "https://files.YOUR-DOMAIN.example/spm-packages" CACHE STRING
 	"Default registry: local/mounted dir, git+https(s)/git+ssh repo, or http(s) tarball server")
 
 # Optional default HTTP headers for the registry (e.g. an auth token),
@@ -52,15 +53,14 @@ endif()
 set(SPM_REGISTRY_HEADERS "${_spm_default_headers}" CACHE STRING
 	"Default HTTP headers sent with registry downloads, semicolon-separated 'Key: Value' entries")
 
-set(SPM_PACKAGES_DIR "${CMAKE_BINARY_DIR}/spm/packages/repositories" CACHE PATH "Recipe root")
-set(SPM_CACHE_DIRECTORY "${CMAKE_BINARY_DIR}/spm/packages/cache" CACHE PATH "Precompiled/installed binary cache")
-set(SPM_DOWNLOADS_DIR "${CMAKE_BINARY_DIR}/_spm/_downloads" CACHE PATH "Download cache directory")
+set(SPM_PACKAGES_DIR "${CMAKE_SOURCE_DIR}/packages/repositories" CACHE PATH "Recipe root (source of truth)")
+set(SPM_CACHE_DIRECTORY "${CMAKE_SOURCE_DIR}/packages/cache" CACHE PATH "Precompiled/installed binary cache")
 set(SPM_PARALLEL_JOBS "4" CACHE STRING "Parallel build jobs used when building a recipe")
 set(SPM_SKIP_TESTS OFF CACHE BOOL "Skip recipe test phase even if RUN_TESTS was requested (warn instead of fail)")
 set(SPM_FORCE_REBUILD OFF CACHE BOOL "Ignore all cache hits and rebuild every requested package from scratch")
 
 find_program(CTEST_EXECUTABLE NAMES ctest)
-find_program(GIT_EXECUTABLE NAMES git)
+find_program(GIT_EXECUTABLE NAMES git)   # needed for git+ registry mode and patch application
 
 set(SPM_REGISTRY_REF "" CACHE STRING
 	"Default branch/tag to check out for git+ registries (empty = repo's default branch)")
@@ -88,7 +88,7 @@ define_property(GLOBAL PROPERTY SPM_REQUIRED_PACKAGES
 # ------------------------------------------------------------
 # Locate the RECIPE directory for name@version.
 #   packages/repositories/<l>/<n>/<version>/CMakeLists.txt
-# If missing locally, resolve it from `registry`:
+# If missing locally and SPM_REMOTE is ON, resolve it from `registry`:
 #   - local directory  -> used IN PLACE, never copied.
 #   - git+https(s)/ssh -> sparse partial clone of just that one
 #                         subtree, moved into SPM_PACKAGES_DIR.
@@ -247,9 +247,9 @@ endfunction()
 # (compiler/build type), so the cache busts automatically if
 # either the pin or the toolchain changes.
 # ------------------------------------------------------------
-function(_spm_get_build_hash name version git_url git_tag url url_hash configs build_type out_hash)
+function(_spm_get_build_hash name version git_url git_tag url url_hash configs build_type build_shared out_hash)
 	string(SHA256 _hash
-		"${name}-${version}-${git_url}-${git_tag}-${url}-${url_hash}-${configs}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${build_type}-${CMAKE_GENERATOR}")
+		"${name}-${version}-${git_url}-${git_tag}-${url}-${url_hash}-${configs}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${build_type}-${build_shared}-${CMAKE_GENERATOR}")
 	string(SUBSTRING "${_hash}" 0 16 _hash)
 	set(${out_hash} "${_hash}" PARENT_SCOPE)
 endfunction()
@@ -262,7 +262,7 @@ endfunction()
 # build graph.
 # ------------------------------------------------------------
 function(_spm_build_and_import name version recipe_dir)
-	set(options RUN_TESTS FORCE)
+	set(options RUN_TESTS FORCE SHARED)
 	set(oneValArgs GIT_URL GIT_TAG URL HASH)
 	set(multiValArgs PATCHES CONFIGS)
 	cmake_parse_arguments(B "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
@@ -279,8 +279,14 @@ function(_spm_build_and_import name version recipe_dir)
 		set(_pkg_build_type "Release")
 	endif()
 
+	if(B_SHARED)
+		set(_pkg_build_shared "ON")
+	else()
+		set(_pkg_build_shared "OFF")
+	endif()
+
 	_spm_get_build_hash("${name}" "${version}" "${B_GIT_URL}" "${B_GIT_TAG}"
-		"${B_URL}" "${B_HASH}" "${B_CONFIGS}" "${_pkg_build_type}" _hash)
+		"${B_URL}" "${B_HASH}" "${B_CONFIGS}" "${_pkg_build_type}" "${_pkg_build_shared}" _hash)
 
 	set(_cache_dir  "${SPM_CACHE_DIRECTORY}/${_letter}/${name}/${_hash}")
 	set(_build_dir  "${CMAKE_BINARY_DIR}/_spm/${name}-${version}-${_hash}")
@@ -332,7 +338,7 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 					-DCMAKE_BUILD_TYPE=${_pkg_build_type}
 					-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
 					-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-					-DBUILD_SHARED_LIBS=OFF
+					-DBUILD_SHARED_LIBS=${_pkg_build_shared}
 					-DBUILD_TESTING=${_pkg_build_testing}
 			RESULT_VARIABLE _cfg_result
 			OUTPUT_VARIABLE _cfg_output
@@ -420,13 +426,19 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 		_spm_log_fatal("Could not locate a compiled library for '${name}' under ${_cache_dir}")
 	endif()
 
+	if(_pkg_build_shared STREQUAL "ON")
+		set(_imported_kind SHARED)
+	else()
+		set(_imported_kind STATIC)
+	endif()
+
 	if(NOT TARGET ${name})
-		add_library(${name} STATIC IMPORTED GLOBAL)
+		add_library(${name} ${_imported_kind} IMPORTED GLOBAL)
 		set_target_properties(${name} PROPERTIES
 			IMPORTED_LOCATION "${_spm_${name}_LIB}"
 			INTERFACE_INCLUDE_DIRECTORIES "${_cache_dir}/include"
 		)
-		_spm_log("Registered IMPORTED target '${name}' -> ${_spm_${name}_LIB}")
+		_spm_log("Registered ${_imported_kind} IMPORTED target '${name}' - ${_spm_${name}_LIB}")
 	endif()
 endfunction()
 
@@ -467,10 +479,11 @@ endfunction()
 #
 #   RUN_TESTS  # run the recipe's own ctest suite before caching
 #   FORCE      # ignore any existing cache entry, rebuild
+#   SHARED     # build a shared library instead of static (default)
 # )
 # ------------------------------------------------------------
 function(spm_require_package)
-	set(options RUN_TESTS FORCE)
+	set(options RUN_TESTS FORCE SHARED)
 	set(oneValArgs NAME VERSION DIRECTORY REGISTRY REGISTRY_REF GIT_URL GIT_TAG URL HASH)
 	set(multiValArgs PATCHES CONFIGS HEADERS)
 	cmake_parse_arguments(ARG "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
@@ -529,6 +542,10 @@ function(spm_require_package)
 	if(ARG_FORCE)
 		set(_force_flag "FORCE")
 	endif()
+	set(_shared_flag "")
+	if(ARG_SHARED)
+		set(_shared_flag "SHARED")
+	endif()
 
 	_spm_build_and_import("${ARG_NAME}" "${ARG_VERSION}" "${_recipe_dir}"
 		GIT_URL  "${ARG_GIT_URL}"
@@ -539,6 +556,7 @@ function(spm_require_package)
 		CONFIGS  ${ARG_CONFIGS}
 		${_run_tests_flag}
 		${_force_flag}
+		${_shared_flag}
 	)
 
 	if(NOT TARGET ${ARG_NAME} AND NOT TARGET ${ARG_NAME}::${ARG_NAME})
@@ -622,4 +640,58 @@ function(spm_fetch_source)
 	endforeach()
 
 	set(SPM_PKG_SOURCE_DIR "${${SPM_PKG_NAME}_SOURCE_DIR}" PARENT_SCOPE)
+endfunction()
+
+#
+# spm_run_external_build(
+#   [SOURCE_DIR <dir>]              # default: SPM_PKG_SOURCE_DIR
+#   [CONFIGURE_COMMAND <cmd...>]
+#   BUILD_COMMAND <cmd...>
+#   [INSTALL_COMMAND <cmd...>]
+#   [BUILD_IN_SOURCE
+# )
+function(spm_run_external_build)
+	set(options BUILD_IN_SOURCE)
+	set(multiValArgs CONFIGURE_COMMAND BUILD_COMMAND INSTALL_COMMAND)
+	set(oneValArgs SOURCE_DIR)
+	cmake_parse_arguments(X "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+	if(NOT X_SOURCE_DIR)
+		if(NOT SPM_PKG_SOURCE_DIR)
+			_spm_log_fatal("spm_run_external_build() needs SOURCE_DIR (call spm_fetch_source() first, or pass it explicitly)")
+		endif()
+		set(X_SOURCE_DIR "${SPM_PKG_SOURCE_DIR}")
+	endif()
+	if(NOT X_BUILD_COMMAND)
+		_spm_log_fatal("spm_run_external_build() requires BUILD_COMMAND")
+	endif()
+
+	include(ExternalProject)
+
+	set(_ep_args
+		SOURCE_DIR      "${X_SOURCE_DIR}"
+		BUILD_COMMAND   ${X_BUILD_COMMAND}
+		INSTALL_DIR     "${CMAKE_INSTALL_PREFIX}"
+		PREFIX          "${CMAKE_CURRENT_BINARY_DIR}/ep"
+	)
+	if(X_CONFIGURE_COMMAND)
+		list(APPEND _ep_args CONFIGURE_COMMAND ${X_CONFIGURE_COMMAND})
+	else()
+		list(APPEND _ep_args CONFIGURE_COMMAND "")
+	endif()
+	if(X_INSTALL_COMMAND)
+		list(APPEND _ep_args INSTALL_COMMAND ${X_INSTALL_COMMAND})
+	else()
+		list(APPEND _ep_args INSTALL_COMMAND "")
+	endif()
+	if(X_BUILD_IN_SOURCE)
+		list(APPEND _ep_args BUILD_IN_SOURCE TRUE)
+	endif()
+
+	ExternalProject_Add(${SPM_PKG_NAME}_external ${_ep_args})
+
+	if(NOT TARGET spm_external_default)
+		add_custom_target(spm_external_default ALL)
+	endif()
+	add_dependencies(spm_external_default ${SPM_PKG_NAME}_external)
 endfunction()
