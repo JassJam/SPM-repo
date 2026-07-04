@@ -329,6 +329,27 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 		endforeach()
 
 		_spm_log("Configuring '${name}@${version}' (${_hash})")
+		set(_toolchain_args "")
+		if(CMAKE_TOOLCHAIN_FILE)
+			list(APPEND _toolchain_args -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE})
+		else()
+			list(APPEND _toolchain_args
+				-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+				-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+			)
+		endif()
+		foreach(_var
+			CMAKE_SYSTEM_NAME CMAKE_SYSTEM_PROCESSOR
+			CMAKE_OSX_SYSROOT CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET
+			ANDROID_ABI ANDROID_PLATFORM ANDROID_NDK ANDROID_STL
+			CMAKE_FIND_ROOT_PATH_MODE_PROGRAM CMAKE_FIND_ROOT_PATH_MODE_LIBRARY
+			CMAKE_FIND_ROOT_PATH_MODE_INCLUDE CMAKE_FIND_ROOT_PATH_MODE_PACKAGE
+		)
+			if(DEFINED ${_var})
+				list(APPEND _toolchain_args -D${_var}=${${_var}})
+			endif()
+		endforeach()
+
 		execute_process(
 			COMMAND ${CMAKE_COMMAND}
 					-S "${recipe_dir}" -B "${_build_dir}"
@@ -336,10 +357,10 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 					-C "${_input_script}"
 					-DCMAKE_INSTALL_PREFIX=${_cache_dir}
 					-DCMAKE_BUILD_TYPE=${_pkg_build_type}
-					-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-					-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+					${_toolchain_args}
 					-DBUILD_SHARED_LIBS=${_pkg_build_shared}
 					-DBUILD_TESTING=${_pkg_build_testing}
+					-DCMAKE_POSITION_INDEPENDENT_CODE=ON
 			RESULT_VARIABLE _cfg_result
 			OUTPUT_VARIABLE _cfg_output
 			ERROR_VARIABLE  _cfg_output
