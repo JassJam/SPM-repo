@@ -20,7 +20,6 @@ set(SPM_CMAKE_INCLUDED TRUE)
 
 set(SPM_ROOT "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "Path to spm.cmake's directory")
 
-set(SPM_REMOTE ON CACHE BOOL "Fetch missing recipes from a registry")
 set(SPM_VERBOSE_OUTPUT OFF CACHE BOOL "Verbose SPM logging")
 
 # The registry is ONE of:
@@ -89,7 +88,7 @@ define_property(GLOBAL PROPERTY SPM_REQUIRED_PACKAGES
 # ------------------------------------------------------------
 # Locate the RECIPE directory for name@version.
 #   packages/repositories/<l>/<n>/<version>/CMakeLists.txt
-# If missing locally and SPM_REMOTE is ON, resolve it from `registry`:
+# If missing locally, resolve it from `registry`:
 #   - local directory  -> used IN PLACE, never copied.
 #   - git+https(s)/ssh -> sparse partial clone of just that one
 #                         subtree, moved into SPM_PACKAGES_DIR.
@@ -115,14 +114,6 @@ function(_spm_resolve_recipe_dir name version registry ref headers out_dir)
 		_spm_log("Using recipe for '${name}@${version}' at ${_local_repo_dir}")
 		set(${out_dir} "${_local_repo_dir}" PARENT_SCOPE)
 		return()
-	endif()
-
-	if(NOT SPM_REMOTE)
-		_spm_log_fatal(
-			"No recipe found for '${name}@${version}' at ${_local_repo_dir} and SPM_REMOTE is OFF")
-	endif()
-	if(NOT registry)
-		_spm_log_fatal("SPM_REMOTE is ON but no registry is configured (SPM_REGISTRY is empty)")
 	endif()
 
 	if(IS_DIRECTORY "${registry}")
