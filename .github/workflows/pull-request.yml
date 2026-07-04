@@ -77,7 +77,7 @@ jobs:
         id: platform_check
         shell: bash
         run: |
-          OUTPUT=$(cmake -DRECIPE_DIR="${{ matrix.package }}" -P ci/check-unsupported.cmake)
+          OUTPUT=$(cmake -DRECIPE_DIR="${{ matrix.package }}" -P ci/test-harness/unsupported.cmake)
           SKIP=false
           if echo "$OUTPUT" | grep -q '^SPM_UNSUPPORTED:'; then
             SKIP=true
