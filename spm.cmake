@@ -2,12 +2,12 @@
 # SPM - a tiny package manager for CMake
 #
 # packages/repositories/<l>/<n>/<version>/CMakeLists.txt
-#     -> the RECIPE: how to fetch source and build it.
+#        the RECIPE: how to fetch source and build it.
 #        Never add_subdirectory()'d into your project. Run as
 #        an isolated configure+build+install at setup time.
 #
 # packages/cache/<l>/<n>/<hash>/
-#     -> the INSTALLED, PRECOMPILED result of running a recipe.
+#        the INSTALLED, PRECOMPILED result of running a recipe.
 #        This is what becomes the CMake target you link against.
 # ============================================================
 
@@ -24,9 +24,8 @@ set(SPM_REMOTE ON CACHE BOOL "Fetch missing recipes from a registry")
 set(SPM_VERBOSE_OUTPUT OFF CACHE BOOL "Verbose SPM logging")
 
 # The registry is ONE of:
-#   - a local/mounted directory (e.g. an NFS/SMB share) containing plain,
-#     already-unzipped recipe folders at "<registry>/<letter>/<n>/<version>/".
-#     Used IN PLACE — never copied.
+#   - a local/mounted directory containing plain, already-unzipped recipe
+# 		folders at "<registry>/<letter>/<n>/<version>/".
 #   - "git+https://..." or "git+ssh://..." — a git repo containing plain,
 #     already-unzipped recipe folders in the same layout. Fetched via a
 #     PARTIAL, SPARSE clone (--filter=blob:none --sparse), so only the one
@@ -37,7 +36,7 @@ set(SPM_VERBOSE_OUTPUT OFF CACHE BOOL "Verbose SPM logging")
 # Detected automatically from the string's shape; see _spm_resolve_recipe_dir.
 #
 # TODO: replace with your actual file server URL, git repo, or mounted path.
-set(SPM_REGISTRY "https://files.YOUR-DOMAIN.example/spm-packages" CACHE STRING
+set(SPM_REGISTRY "git+https://codeberg.org/JassJam/SPM-repo.git" CACHE STRING
 	"Default registry: local/mounted dir, git+https(s)/git+ssh repo, or http(s) tarball server")
 
 # Optional default HTTP headers for the registry (e.g. an auth token),
@@ -53,14 +52,15 @@ endif()
 set(SPM_REGISTRY_HEADERS "${_spm_default_headers}" CACHE STRING
 	"Default HTTP headers sent with registry downloads, semicolon-separated 'Key: Value' entries")
 
-set(SPM_PACKAGES_DIR "${CMAKE_SOURCE_DIR}/packages/repositories" CACHE PATH "Recipe root (source of truth)")
-set(SPM_CACHE_DIRECTORY "${CMAKE_SOURCE_DIR}/packages/cache" CACHE PATH "Precompiled/installed binary cache")
+set(SPM_PACKAGES_DIR "${CMAKE_BINARY_DIR}/spm/packages/repositories" CACHE PATH "Recipe root (source of truth)")
+set(SPM_CACHE_DIRECTORY "${CMAKE_BINARY_DIR}/spm/packages/cache" CACHE PATH "Precompiled/installed binary cache")
+set(SPM_DOWNLOADS_DIR "${CMAKE_BINARY_DIR}/_spm/_downloads" CACHE PATH "Download cache directory")
 set(SPM_PARALLEL_JOBS "4" CACHE STRING "Parallel build jobs used when building a recipe")
 set(SPM_SKIP_TESTS OFF CACHE BOOL "Skip recipe test phase even if RUN_TESTS was requested (warn instead of fail)")
 set(SPM_FORCE_REBUILD OFF CACHE BOOL "Ignore all cache hits and rebuild every requested package from scratch")
 
 find_program(CTEST_EXECUTABLE NAMES ctest)
-find_program(GIT_EXECUTABLE NAMES git)   # needed for git+ registry mode and patch application
+find_program(GIT_EXECUTABLE NAMES git)
 
 set(SPM_REGISTRY_REF "" CACHE STRING
 	"Default branch/tag to check out for git+ registries (empty = repo's default branch)")
@@ -89,10 +89,10 @@ define_property(GLOBAL PROPERTY SPM_REQUIRED_PACKAGES
 # Locate the RECIPE directory for name@version.
 #   packages/repositories/<l>/<n>/<version>/CMakeLists.txt
 # If missing locally and SPM_REMOTE is ON, resolve it from `registry`:
-#   - local directory  -> used IN PLACE, never copied.
-#   - git+https(s)/ssh -> sparse partial clone of just that one
-#                         subtree, moved into SPM_PACKAGES_DIR.
-#   - http(s) URL      -> tarball downloaded + extracted into
+#   - local directory      used IN PLACE, never copied.
+#   - git+https(s)/ssh     sparse partial clone of just that one
+#                          subtree, moved into SPM_PACKAGES_DIR.
+#   - http(s) URL          tarball downloaded + extracted into
 #                          SPM_PACKAGES_DIR.
 # Git and tarball modes both have to materialize something on
 # disk (there's nothing to point at directly until fetched) —
@@ -386,7 +386,7 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 			endif()
 		endif()
 
-		_spm_log("Installing '${name}@${version}' -> ${_cache_dir}")
+		_spm_log("Installing '${name}@${version}' - ${_cache_dir}")
 		execute_process(
 			COMMAND ${CMAKE_COMMAND} --install "${_build_dir}" --config ${_pkg_build_type}
 			RESULT_VARIABLE _install_result
