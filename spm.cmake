@@ -139,7 +139,7 @@ function(_spm_resolve_recipe_dir name version registry ref headers out_dir)
 			list(APPEND _git_config_args -c "http.extraHeader=${_h}")
 		endforeach()
 
-		set(_scratch_dir "${SPM_DOWNLOADS_DIR}/${name}-${version}-git")
+		set(_scratch_dir "${CMAKE_BINARY_DIR}/_spm/_downloads/${name}-${version}-git")
 		if(EXISTS "${_scratch_dir}")
 			file(REMOVE_RECURSE "${_scratch_dir}")
 		endif()
@@ -263,9 +263,15 @@ endfunction()
 # ------------------------------------------------------------
 function(_spm_build_and_import name version recipe_dir)
 	set(options RUN_TESTS FORCE SHARED)
-	set(oneValArgs GIT_URL GIT_TAG URL HASH)
+	set(oneValArgs GIT_URL GIT_TAG URL HASH IMPORT_NAME)
 	set(multiValArgs PATCHES CONFIGS)
 	cmake_parse_arguments(B "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+	if(B_IMPORT_NAME)
+		set(_import_name "${B_IMPORT_NAME}")
+	else()
+		set(_import_name "${name}")
+	endif()
 
 	_spm_lowercase_first_char("${name}" _letter)
 
@@ -434,19 +440,30 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 
 	# --- Expose the cached, precompiled result as a CMake target -----------
 
-	find_package(${name} QUIET CONFIG PATHS "${_cache_dir}" NO_DEFAULT_PATH)
-	if(${name}_FOUND)
-		_spm_log("'${name}' provides a CMake package config, imported via find_package()")
+	find_package(${_import_name} QUIET CONFIG PATHS "${_cache_dir}" NO_DEFAULT_PATH)
+	if(${_import_name}_FOUND)
+		_spm_log("'${_import_name}' provides a CMake package config, imported via find_package()")
+		# Multi-component packages (Abseil, Boost, ICU, ...) expose many
+		# targets (absl::strings, absl::time, ...) with no single unified
+		# one — a successful find_package() IS the success signal here,
+		# there's nothing more generic to verify beyond this.
 		return()
 	endif()
 
-	find_library(_spm_${name}_LIB
-		NAMES ${name} lib${name}
+	find_library(_spm_${_import_name}_LIB
+		NAMES ${_import_name} lib${_import_name}
 		PATHS "${_cache_dir}/lib" "${_cache_dir}/lib64"
 		NO_DEFAULT_PATH
 	)
-	if(NOT _spm_${name}_LIB)
-		_spm_log_fatal("Could not locate a compiled library for '${name}' under ${_cache_dir}")
+	if(NOT _spm_${_import_name}_LIB)
+		_spm_log_fatal(
+			"Could not locate a compiled library for '${_import_name}' under ${_cache_dir}. "
+			"If this package's real CMake package/target name differs from its recipe name "
+			"(e.g. the 'abseil' recipe installs as CMake package 'absl'), pass "
+			"IMPORT_NAME to spm_require_package() to point at the real name. If the package "
+			"exposes multiple component targets with no single unified library, this generic "
+			"single-library fallback doesn't apply — the recipe needs a proper installed "
+			"CMake package config instead.")
 	endif()
 
 	if(_pkg_build_shared STREQUAL "ON")
@@ -455,13 +472,13 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 		set(_imported_kind STATIC)
 	endif()
 
-	if(NOT TARGET ${name})
-		add_library(${name} ${_imported_kind} IMPORTED GLOBAL)
-		set_target_properties(${name} PROPERTIES
-			IMPORTED_LOCATION "${_spm_${name}_LIB}"
+	if(NOT TARGET ${_import_name})
+		add_library(${_import_name} ${_imported_kind} IMPORTED GLOBAL)
+		set_target_properties(${_import_name} PROPERTIES
+			IMPORTED_LOCATION "${_spm_${_import_name}_LIB}"
 			INTERFACE_INCLUDE_DIRECTORIES "${_cache_dir}/include"
 		)
-		_spm_log("Registered ${_imported_kind} IMPORTED target '${name}' - ${_spm_${name}_LIB}")
+		_spm_log("Registered ${_imported_kind} IMPORTED target '${_import_name}' -> ${_spm_${_import_name}_LIB}")
 	endif()
 endfunction()
 
@@ -503,11 +520,17 @@ endfunction()
 #   RUN_TESTS  # run the recipe's own ctest suite before caching
 #   FORCE      # ignore any existing cache entry, rebuild
 #   SHARED     # build a shared library instead of static (default)
+#   IMPORT_NAME <real CMake package/target name>
+#              # use when a package's actual CMake package name (what
+#              # find_package() looks for) differs from the recipe's
+#              # own identity/folder name — e.g. NAME abseil installs
+#              # as CMake package "absl", so pass IMPORT_NAME absl.
+#              # Defaults to NAME if not given.
 # )
 # ------------------------------------------------------------
 function(spm_require_package)
 	set(options RUN_TESTS FORCE SHARED)
-	set(oneValArgs NAME VERSION DIRECTORY REGISTRY REGISTRY_REF GIT_URL GIT_TAG URL HASH)
+	set(oneValArgs NAME VERSION DIRECTORY REGISTRY REGISTRY_REF GIT_URL GIT_TAG URL HASH IMPORT_NAME)
 	set(multiValArgs PATCHES CONFIGS HEADERS)
 	cmake_parse_arguments(ARG "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
 
@@ -569,12 +592,18 @@ function(spm_require_package)
 	if(ARG_SHARED)
 		set(_shared_flag "SHARED")
 	endif()
+	if(ARG_IMPORT_NAME)
+		set(_effective_import_name "${ARG_IMPORT_NAME}")
+	else()
+		set(_effective_import_name "${ARG_NAME}")
+	endif()
 
 	_spm_build_and_import("${ARG_NAME}" "${ARG_VERSION}" "${_recipe_dir}"
-		GIT_URL  "${ARG_GIT_URL}"
-		GIT_TAG  "${ARG_GIT_TAG}"
-		URL      "${ARG_URL}"
-		HASH     "${ARG_HASH}"
+		GIT_URL     "${ARG_GIT_URL}"
+		GIT_TAG     "${ARG_GIT_TAG}"
+		URL         "${ARG_URL}"
+		HASH        "${ARG_HASH}"
+		IMPORT_NAME "${_effective_import_name}"
 		PATCHES  ${ARG_PATCHES}
 		CONFIGS  ${ARG_CONFIGS}
 		${_run_tests_flag}
@@ -582,11 +611,6 @@ function(spm_require_package)
 		${_shared_flag}
 	)
 
-	if(NOT TARGET ${ARG_NAME} AND NOT TARGET ${ARG_NAME}::${ARG_NAME})
-		_spm_log_fatal(
-			"Recipe for '${ARG_NAME}@${ARG_VERSION}' did not produce a target named "
-			"'${ARG_NAME}' or '${ARG_NAME}::${ARG_NAME}'")
-	endif()
 endfunction()
 
 # ------------------------------------------------------------

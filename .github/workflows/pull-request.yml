@@ -76,7 +76,7 @@ jobs:
         shell: bash
         run: |
           cmake -S ci/test-harness -B build \
-          	-DCMAKE_CXX_STANDARD=23\
+          	-DCMAKE_CXX_STANDARD=23 \
             -DSPM_TEST_PACKAGE_NAME="${{ steps.pkg.outputs.name }}" \
             -DSPM_TEST_PACKAGE_VERSION="${{ steps.pkg.outputs.version }}" \
             -DSPM_TEST_LINK="${{ matrix.link }}"
