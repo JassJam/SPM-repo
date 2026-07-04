@@ -48,6 +48,7 @@ jobs:
   test-package:
     needs: detect-changes
     if: needs.detect-changes.outputs.has_packages == 'true'
+    name: ${{ matrix.os }} / ${{ matrix.link }} / ${{ matrix.package }}
     strategy:
       fail-fast: false
       matrix:
@@ -57,7 +58,7 @@ jobs:
           - windows-latest # windows x86_64
           - macos-13 # macos x86_64 (Intel)
           - macos-latest # macos arm64 (Apple Silicon)
-        shared: [OFF, ON]
+        link: [static, shared]
         package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -78,7 +79,7 @@ jobs:
           cmake -S ci/test-harness -B build \
             -DSPM_TEST_PACKAGE_NAME="${{ steps.pkg.outputs.name }}" \
             -DSPM_TEST_PACKAGE_VERSION="${{ steps.pkg.outputs.version }}" \
-            -DSPM_TEST_SHARED="${{ matrix.shared }}"
+            -DSPM_TEST_LINK="${{ matrix.link }}"
       - name: Build (drives the recipe's isolated build)
         shell: bash
         run: cmake --build build --config Release
@@ -86,7 +87,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: spm-logs-${{ matrix.os }}-shared${{ matrix.shared }}-${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}
+          name: spm-logs-${{ matrix.os }}-${{ matrix.link }}-${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}
           path: |
             build/_spm/**/CMakeFiles/CMakeError.log
             build/_spm/**/CMakeFiles/CMakeOutput.log
