@@ -13,7 +13,7 @@ string(TOLOWER "${_letter}" _letter)
 set(_recipe_dir "${_spm_repo_root}/${_letter}/${SPM_TEST_PACKAGE_NAME}/${SPM_TEST_PACKAGE_VERSION}")
 
 set(_shared_flag "")
-if(SPM_TEST_SHARED)
+if(SPM_TEST_LINK STREQUAL "shared")
 	set(_shared_flag "SHARED")
 endif()
 
