@@ -580,6 +580,16 @@ function(spm_require_package)
 	endif()
 
 	_spm_log("Building & importing '${ARG_NAME}@${ARG_VERSION}' from ${_recipe_dir}")
+
+	if(NOT ARG_IMPORT_NAME AND EXISTS "${_recipe_dir}/IMPORT_NAME")
+		file(STRINGS "${_recipe_dir}/IMPORT_NAME" _import_name_from_file LIMIT_COUNT 1)
+		string(STRIP "${_import_name_from_file}" _import_name_from_file)
+		if(_import_name_from_file)
+			_spm_log("Recipe declares IMPORT_NAME '${_import_name_from_file}' via IMPORT_NAME file")
+			set(ARG_IMPORT_NAME "${_import_name_from_file}")
+		endif()
+	endif()
+
 	set(_run_tests_flag "")
 	if(ARG_RUN_TESTS)
 		set(_run_tests_flag "RUN_TESTS")
@@ -611,6 +621,14 @@ function(spm_require_package)
 		${_shared_flag}
 	)
 
+	if(NOT TARGET ${_effective_import_name} AND NOT TARGET ${_effective_import_name}::${_effective_import_name})
+		_spm_log(
+			"Note: no target named '${_effective_import_name}' or "
+			"'${_effective_import_name}::${_effective_import_name}' exists after building "
+			"'${ARG_NAME}@${ARG_VERSION}'. If this package exposes multiple component "
+			"targets, link against those directly. If it doesn't, and this is unexpected, "
+			"check IMPORT_NAME matches the package's real CMake package/target name")
+	endif()
 endfunction()
 
 # ------------------------------------------------------------
