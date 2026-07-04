@@ -590,6 +590,16 @@ function(spm_require_package)
 		_spm_resolve_recipe_dir("${ARG_NAME}" "${ARG_VERSION}" "${_effective_registry}" "${_effective_ref}" "${_effective_headers}" _recipe_dir)
 	endif()
 
+	set(_unsupported_script "${_recipe_dir}/Support.cmake")
+	if(EXISTS "${_unsupported_script}")
+		unset(SPM_UNSUPPORTED_REASON)
+		include("${_unsupported_script}")
+		if(SPM_UNSUPPORTED_REASON)
+			_spm_log_fatal(
+				"Recipe for '${ARG_NAME}@${ARG_VERSION}' is unsupported here: ${SPM_UNSUPPORTED_REASON}")
+		endif()
+	endif()
+
 	_spm_log("Building & importing '${ARG_NAME}@${ARG_VERSION}' from ${_recipe_dir}")
 
 	set(_run_tests_flag "")
