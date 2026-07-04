@@ -56,7 +56,6 @@ jobs:
           - ubuntu-latest # linux x86_64
           - ubuntu-24.04-arm # linux arm64
           - windows-latest # windows x86_64
-          - macos-13 # macos x86_64 (Intel)
           - macos-latest # macos arm64 (Apple Silicon)
         link: [static, shared]
         package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
