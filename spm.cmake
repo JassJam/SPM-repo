@@ -2,12 +2,12 @@
 # SPM - a tiny package manager for CMake
 #
 # packages/repositories/<l>/<n>/<version>/CMakeLists.txt
-#     -> the RECIPE: how to fetch source and build it.
+#        the RECIPE: how to fetch source and build it.
 #        Never add_subdirectory()'d into your project. Run as
 #        an isolated configure+build+install at setup time.
 #
 # packages/cache/<l>/<n>/<hash>/
-#     -> the INSTALLED, PRECOMPILED result of running a recipe.
+#        the INSTALLED, PRECOMPILED result of running a recipe.
 #        This is what becomes the CMake target you link against.
 # ============================================================
 
@@ -24,9 +24,8 @@ set(SPM_REMOTE ON CACHE BOOL "Fetch missing recipes from a registry")
 set(SPM_VERBOSE_OUTPUT OFF CACHE BOOL "Verbose SPM logging")
 
 # The registry is ONE of:
-#   - a local/mounted directory (e.g. an NFS/SMB share) containing plain,
-#     already-unzipped recipe folders at "<registry>/<letter>/<n>/<version>/".
-#     Used IN PLACE — never copied.
+#   - a local/mounted directory containing plain, already-unzipped recipe
+# 		folders at "<registry>/<letter>/<n>/<version>/".
 #   - "git+https://..." or "git+ssh://..." — a git repo containing plain,
 #     already-unzipped recipe folders in the same layout. Fetched via a
 #     PARTIAL, SPARSE clone (--filter=blob:none --sparse), so only the one
@@ -37,7 +36,7 @@ set(SPM_VERBOSE_OUTPUT OFF CACHE BOOL "Verbose SPM logging")
 # Detected automatically from the string's shape; see _spm_resolve_recipe_dir.
 #
 # TODO: replace with your actual file server URL, git repo, or mounted path.
-set(SPM_REGISTRY "https://files.YOUR-DOMAIN.example/spm-packages" CACHE STRING
+set(SPM_REGISTRY "git+https://codeberg.org/JassJam/SPM-repo.git" CACHE STRING
 	"Default registry: local/mounted dir, git+https(s)/git+ssh repo, or http(s) tarball server")
 
 # Optional default HTTP headers for the registry (e.g. an auth token),
@@ -53,14 +52,15 @@ endif()
 set(SPM_REGISTRY_HEADERS "${_spm_default_headers}" CACHE STRING
 	"Default HTTP headers sent with registry downloads, semicolon-separated 'Key: Value' entries")
 
-set(SPM_PACKAGES_DIR "${CMAKE_SOURCE_DIR}/packages/repositories" CACHE PATH "Recipe root (source of truth)")
-set(SPM_CACHE_DIRECTORY "${CMAKE_SOURCE_DIR}/packages/cache" CACHE PATH "Precompiled/installed binary cache")
+set(SPM_PACKAGES_DIR "${CMAKE_BINARY_DIR}/spm/packages/repositories" CACHE PATH "Recipe root (source of truth)")
+set(SPM_CACHE_DIRECTORY "${CMAKE_BINARY_DIR}/spm/packages/cache" CACHE PATH "Precompiled/installed binary cache")
+set(SPM_DOWNLOADS_DIR "${CMAKE_BINARY_DIR}/_spm/_downloads" CACHE PATH "Download cache directory")
 set(SPM_PARALLEL_JOBS "4" CACHE STRING "Parallel build jobs used when building a recipe")
 set(SPM_SKIP_TESTS OFF CACHE BOOL "Skip recipe test phase even if RUN_TESTS was requested (warn instead of fail)")
 set(SPM_FORCE_REBUILD OFF CACHE BOOL "Ignore all cache hits and rebuild every requested package from scratch")
 
 find_program(CTEST_EXECUTABLE NAMES ctest)
-find_program(GIT_EXECUTABLE NAMES git)   # needed for git+ registry mode and patch application
+find_program(GIT_EXECUTABLE NAMES git)
 
 set(SPM_REGISTRY_REF "" CACHE STRING
 	"Default branch/tag to check out for git+ registries (empty = repo's default branch)")
@@ -89,10 +89,10 @@ define_property(GLOBAL PROPERTY SPM_REQUIRED_PACKAGES
 # Locate the RECIPE directory for name@version.
 #   packages/repositories/<l>/<n>/<version>/CMakeLists.txt
 # If missing locally and SPM_REMOTE is ON, resolve it from `registry`:
-#   - local directory  -> used IN PLACE, never copied.
-#   - git+https(s)/ssh -> sparse partial clone of just that one
-#                         subtree, moved into SPM_PACKAGES_DIR.
-#   - http(s) URL      -> tarball downloaded + extracted into
+#   - local directory      used IN PLACE, never copied.
+#   - git+https(s)/ssh     sparse partial clone of just that one
+#                          subtree, moved into SPM_PACKAGES_DIR.
+#   - http(s) URL          tarball downloaded + extracted into
 #                          SPM_PACKAGES_DIR.
 # Git and tarball modes both have to materialize something on
 # disk (there's nothing to point at directly until fetched) —
@@ -139,7 +139,7 @@ function(_spm_resolve_recipe_dir name version registry ref headers out_dir)
 			list(APPEND _git_config_args -c "http.extraHeader=${_h}")
 		endforeach()
 
-		set(_scratch_dir "${SPM_DOWNLOADS_DIR}/${name}-${version}-git")
+		set(_scratch_dir "${CMAKE_BINARY_DIR}/_spm/_downloads/${name}-${version}-git")
 		if(EXISTS "${_scratch_dir}")
 			file(REMOVE_RECURSE "${_scratch_dir}")
 		endif()
@@ -263,9 +263,15 @@ endfunction()
 # ------------------------------------------------------------
 function(_spm_build_and_import name version recipe_dir)
 	set(options RUN_TESTS FORCE SHARED)
-	set(oneValArgs GIT_URL GIT_TAG URL HASH)
+	set(oneValArgs GIT_URL GIT_TAG URL HASH IMPORT_NAME)
 	set(multiValArgs PATCHES CONFIGS)
 	cmake_parse_arguments(B "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+	if(B_IMPORT_NAME)
+		set(_import_name "${B_IMPORT_NAME}")
+	else()
+		set(_import_name "${name}")
+	endif()
 
 	_spm_lowercase_first_char("${name}" _letter)
 
@@ -329,6 +335,29 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 		endforeach()
 
 		_spm_log("Configuring '${name}@${version}' (${_hash})")
+		set(_toolchain_args "")
+		if(CMAKE_TOOLCHAIN_FILE)
+			list(APPEND _toolchain_args -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE})
+		else()
+			list(APPEND _toolchain_args
+				-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+				-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+			)
+		endif()
+		foreach(_var
+			CMAKE_SYSTEM_NAME CMAKE_SYSTEM_PROCESSOR
+			CMAKE_OSX_SYSROOT CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET
+			ANDROID_ABI ANDROID_PLATFORM ANDROID_NDK ANDROID_STL
+			CMAKE_FIND_ROOT_PATH_MODE_PROGRAM CMAKE_FIND_ROOT_PATH_MODE_LIBRARY
+			CMAKE_FIND_ROOT_PATH_MODE_INCLUDE CMAKE_FIND_ROOT_PATH_MODE_PACKAGE
+			CMAKE_CXX_STANDARD CMAKE_CXX_STANDARD_REQUIRED CMAKE_CXX_EXTENSIONS
+			CMAKE_C_STANDARD CMAKE_C_STANDARD_REQUIRED
+		)
+			if(DEFINED ${_var})
+				list(APPEND _toolchain_args -D${_var}=${${_var}})
+			endif()
+		endforeach()
+
 		execute_process(
 			COMMAND ${CMAKE_COMMAND}
 					-S "${recipe_dir}" -B "${_build_dir}"
@@ -336,10 +365,10 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 					-C "${_input_script}"
 					-DCMAKE_INSTALL_PREFIX=${_cache_dir}
 					-DCMAKE_BUILD_TYPE=${_pkg_build_type}
-					-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-					-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+					${_toolchain_args}
 					-DBUILD_SHARED_LIBS=${_pkg_build_shared}
 					-DBUILD_TESTING=${_pkg_build_testing}
+					-DCMAKE_POSITION_INDEPENDENT_CODE=ON
 			RESULT_VARIABLE _cfg_result
 			OUTPUT_VARIABLE _cfg_output
 			ERROR_VARIABLE  _cfg_output
@@ -386,7 +415,7 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 			endif()
 		endif()
 
-		_spm_log("Installing '${name}@${version}' -> ${_cache_dir}")
+		_spm_log("Installing '${name}@${version}' - ${_cache_dir}")
 		execute_process(
 			COMMAND ${CMAKE_COMMAND} --install "${_build_dir}" --config ${_pkg_build_type}
 			RESULT_VARIABLE _install_result
@@ -411,19 +440,41 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 
 	# --- Expose the cached, precompiled result as a CMake target -----------
 
-	find_package(${name} QUIET CONFIG PATHS "${_cache_dir}" NO_DEFAULT_PATH)
-	if(${name}_FOUND)
-		_spm_log("'${name}' provides a CMake package config, imported via find_package()")
+	# If the recipe has IMPORT.cmake, use it to import the recipe.
+	set(_import_script "${recipe_dir}/Import.cmake")
+	if(EXISTS "${_import_script}")
+		set(SPM_IMPORT_NAME "${_import_name}")
+		set(SPM_IMPORT_VERSION "${version}")
+		set(SPM_IMPORT_CACHE_DIR "${_cache_dir}")
+		set(SPM_IMPORT_SHARED "${_pkg_build_shared}")
+		_spm_log("Running IMPORT.cmake for '${name}@${version}'")
+		include("${_import_script}")
 		return()
 	endif()
 
-	find_library(_spm_${name}_LIB
-		NAMES ${name} lib${name}
+	find_package(${_import_name} QUIET CONFIG PATHS "${_cache_dir}" NO_DEFAULT_PATH)
+	if(${_import_name}_FOUND)
+		_spm_log("'${_import_name}' provides a CMake package config, imported via find_package()")
+		# Multi-component packages (Abseil, Boost, ICU, ...) expose many
+		# targets (absl::strings, absl::time, ...) with no single unified
+		# one — a successful find_package() IS the success signal here,
+		# there's nothing more generic to verify beyond this.
+		return()
+	endif()
+
+	find_library(_spm_${_import_name}_LIB
+		NAMES ${_import_name} lib${_import_name}
 		PATHS "${_cache_dir}/lib" "${_cache_dir}/lib64"
 		NO_DEFAULT_PATH
 	)
-	if(NOT _spm_${name}_LIB)
-		_spm_log_fatal("Could not locate a compiled library for '${name}' under ${_cache_dir}")
+	if(NOT _spm_${_import_name}_LIB)
+		_spm_log_fatal(
+			"Could not locate a compiled library for '${_import_name}' under ${_cache_dir}. "
+			"If this package's real CMake package/target name differs from its recipe name "
+			"(e.g. the 'abseil' recipe installs as CMake package 'absl'), pass "
+			"IMPORT_NAME to spm_require_package() to point at the real name. If the package "
+			"exposes multiple component targets with no single unified library, add an "
+			"IMPORT.cmake file next to the recipe's CMakeLists.txt to handle it explicitly.")
 	endif()
 
 	if(_pkg_build_shared STREQUAL "ON")
@@ -432,13 +483,13 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 		set(_imported_kind STATIC)
 	endif()
 
-	if(NOT TARGET ${name})
-		add_library(${name} ${_imported_kind} IMPORTED GLOBAL)
-		set_target_properties(${name} PROPERTIES
-			IMPORTED_LOCATION "${_spm_${name}_LIB}"
+	if(NOT TARGET ${_import_name})
+		add_library(${_import_name} ${_imported_kind} IMPORTED GLOBAL)
+		set_target_properties(${_import_name} PROPERTIES
+			IMPORTED_LOCATION "${_spm_${_import_name}_LIB}"
 			INTERFACE_INCLUDE_DIRECTORIES "${_cache_dir}/include"
 		)
-		_spm_log("Registered ${_imported_kind} IMPORTED target '${name}' - ${_spm_${name}_LIB}")
+		_spm_log("Registered ${_imported_kind} IMPORTED target '${_import_name}' -> ${_spm_${_import_name}_LIB}")
 	endif()
 endfunction()
 
@@ -480,11 +531,17 @@ endfunction()
 #   RUN_TESTS  # run the recipe's own ctest suite before caching
 #   FORCE      # ignore any existing cache entry, rebuild
 #   SHARED     # build a shared library instead of static (default)
+#   IMPORT_NAME <real CMake package/target name>
+#              # use when a package's actual CMake package name (what
+#              # find_package() looks for) differs from the recipe's
+#              # own identity/folder name — e.g. NAME abseil installs
+#              # as CMake package "absl", so pass IMPORT_NAME absl.
+#              # Defaults to NAME if not given.
 # )
 # ------------------------------------------------------------
 function(spm_require_package)
 	set(options RUN_TESTS FORCE SHARED)
-	set(oneValArgs NAME VERSION DIRECTORY REGISTRY REGISTRY_REF GIT_URL GIT_TAG URL HASH)
+	set(oneValArgs NAME VERSION DIRECTORY REGISTRY REGISTRY_REF GIT_URL GIT_TAG URL HASH IMPORT_NAME)
 	set(multiValArgs PATCHES CONFIGS HEADERS)
 	cmake_parse_arguments(ARG "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
 
@@ -533,7 +590,18 @@ function(spm_require_package)
 		_spm_resolve_recipe_dir("${ARG_NAME}" "${ARG_VERSION}" "${_effective_registry}" "${_effective_ref}" "${_effective_headers}" _recipe_dir)
 	endif()
 
+	set(_unsupported_script "${_recipe_dir}/Support.cmake")
+	if(EXISTS "${_unsupported_script}")
+		unset(SPM_UNSUPPORTED_REASON)
+		include("${_unsupported_script}")
+		if(SPM_UNSUPPORTED_REASON)
+			_spm_log_fatal(
+				"Recipe for '${ARG_NAME}@${ARG_VERSION}' is unsupported here: ${SPM_UNSUPPORTED_REASON}")
+		endif()
+	endif()
+
 	_spm_log("Building & importing '${ARG_NAME}@${ARG_VERSION}' from ${_recipe_dir}")
+
 	set(_run_tests_flag "")
 	if(ARG_RUN_TESTS)
 		set(_run_tests_flag "RUN_TESTS")
@@ -546,12 +614,18 @@ function(spm_require_package)
 	if(ARG_SHARED)
 		set(_shared_flag "SHARED")
 	endif()
+	if(ARG_IMPORT_NAME)
+		set(_effective_import_name "${ARG_IMPORT_NAME}")
+	else()
+		set(_effective_import_name "${ARG_NAME}")
+	endif()
 
 	_spm_build_and_import("${ARG_NAME}" "${ARG_VERSION}" "${_recipe_dir}"
-		GIT_URL  "${ARG_GIT_URL}"
-		GIT_TAG  "${ARG_GIT_TAG}"
-		URL      "${ARG_URL}"
-		HASH     "${ARG_HASH}"
+		GIT_URL     "${ARG_GIT_URL}"
+		GIT_TAG     "${ARG_GIT_TAG}"
+		URL         "${ARG_URL}"
+		HASH        "${ARG_HASH}"
+		IMPORT_NAME "${_effective_import_name}"
 		PATCHES  ${ARG_PATCHES}
 		CONFIGS  ${ARG_CONFIGS}
 		${_run_tests_flag}
@@ -559,10 +633,13 @@ function(spm_require_package)
 		${_shared_flag}
 	)
 
-	if(NOT TARGET ${ARG_NAME} AND NOT TARGET ${ARG_NAME}::${ARG_NAME})
-		_spm_log_fatal(
-			"Recipe for '${ARG_NAME}@${ARG_VERSION}' did not produce a target named "
-			"'${ARG_NAME}' or '${ARG_NAME}::${ARG_NAME}'")
+	if(NOT TARGET ${_effective_import_name} AND NOT TARGET ${_effective_import_name}::${_effective_import_name})
+		_spm_log(
+			"Note: no target named '${_effective_import_name}' or "
+			"'${_effective_import_name}::${_effective_import_name}' exists after building "
+			"'${ARG_NAME}@${ARG_VERSION}'. If this package exposes multiple component "
+			"targets, link against those directly. If it doesn't, and this is unexpected, "
+			"check IMPORT_NAME matches the package's real CMake package/target name")
 	endif()
 endfunction()
 

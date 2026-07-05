@@ -48,7 +48,6 @@ jobs:
   test-package:
     needs: detect-changes
     if: needs.detect-changes.outputs.has_packages == 'true'
-    name: ${{ matrix.os }} / ${{ matrix.link }} / ${{ matrix.package }}
     strategy:
       fail-fast: false
       matrix:
@@ -60,6 +59,7 @@ jobs:
         link: [static, shared]
         package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
     runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }} / ${{ matrix.link }} / ${{ matrix.package }}
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -72,18 +72,41 @@ jobs:
           IFS='/' read -r LETTER NAME VERSION <<< "${{ matrix.package }}"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      - name: Configure (fetch + build + test the recipe)
+
+      - name: Check platform support
+        id: platform_check
         shell: bash
         run: |
+          OUTPUT=$(cmake -DRECIPE_DIR="${{ matrix.package }}" -P ci/test-harness/unsupported.cmake)
+          SKIP=false
+          if echo "$OUTPUT" | grep -q '^SPM_UNSUPPORTED:'; then
+            SKIP=true
+            REASON=$(echo "$OUTPUT" | sed -n 's/^SPM_UNSUPPORTED://p')
+            echo "::notice::Skipping ${{ matrix.package }} on ${{ matrix.os }} — $REASON"
+          fi
+          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+
+      - name: Configure (fetch + build + test the recipe)
+        if: steps.platform_check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          SHARED_FLAG=OFF
+          if [ "${{ matrix.link }}" = "shared" ]; then
+            SHARED_FLAG=ON
+          fi
           cmake -S ci/test-harness -B build \
+          	-DCMAKE_CXX_STANDARD=23 \
             -DSPM_TEST_PACKAGE_NAME="${{ steps.pkg.outputs.name }}" \
             -DSPM_TEST_PACKAGE_VERSION="${{ steps.pkg.outputs.version }}" \
-            -DSPM_TEST_LINK="${{ matrix.link }}"
+            -DSPM_TEST_SHARED="$SHARED_FLAG"
+
       - name: Build (drives the recipe's isolated build)
+        if: steps.platform_check.outputs.skip != 'true'
         shell: bash
         run: cmake --build build --config Release
+
       - name: Upload logs on failure
-        if: failure()
+        if: failure() && steps.platform_check.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: spm-logs-${{ matrix.os }}-${{ matrix.link }}-${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}

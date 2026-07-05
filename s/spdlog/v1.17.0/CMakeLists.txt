@@ -4,7 +4,7 @@ include(${SPM_ROOT}/spm.cmake)
 
 spm_fetch_source(GIT_URL https://github.com/gabime/spdlog.git GIT_TAG v1.17.0)
 
-set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(SPDLOG_BUILD_SHARED ${BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
 set(SPDLOG_INSTALL      ON  CACHE BOOL "" FORCE)
 
 add_subdirectory(${SPM_PKG_SOURCE_DIR} src)
