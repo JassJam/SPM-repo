@@ -86,6 +86,17 @@ jobs:
           fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
 
+      - name: Install SDL build dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+            libxfixes-dev libxi-dev libxss-dev libxtst-dev \
+            libxkbcommon-dev \
+            libwayland-dev libdecor-0-dev wayland-protocols
+
       - name: Configure (fetch + build + test the recipe)
         if: steps.platform_check.outputs.skip != 'true'
         shell: bash
