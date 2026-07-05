@@ -322,7 +322,15 @@ set(SPM_PKG_HASH [==[${B_HASH}]==] CACHE INTERNAL \"\")
 set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 ")
 		foreach(_cfg ${B_CONFIGS})
-			file(APPEND "${_input_script}" "set(${_cfg} CACHE INTERNAL \"\" FORCE)\n")
+			string(FIND "${_cfg}" "=" _eq_pos)
+			if(_eq_pos EQUAL -1)
+				_spm_log_fatal(
+					"Invalid CONFIGS entry '${_cfg}' for '${name}@${version}' — expected KEY=VALUE")
+			endif()
+			string(SUBSTRING "${_cfg}" 0 ${_eq_pos} _cfg_key)
+			math(EXPR _cfg_val_start "${_eq_pos} + 1")
+			string(SUBSTRING "${_cfg}" ${_cfg_val_start} -1 _cfg_value)
+			file(APPEND "${_input_script}" "set(${_cfg_key} [==[${_cfg_value}]==] CACHE STRING \"\" FORCE)\n")
 		endforeach()
 
 		_spm_log("Configuring '${name}@${version}' (${_hash})")
@@ -379,9 +387,15 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 		endif()
 
 		_spm_log("Building '${name}@${version}'")
+		if(B_RUN_TESTS)
+			set(_build_target_args "")
+		else()
+			set(_build_target_args --target install)
+		endif()
 		execute_process(
 			COMMAND ${CMAKE_COMMAND} --build "${_build_dir}"
 					--config ${_pkg_build_type} --parallel ${SPM_PARALLEL_JOBS}
+					${_build_target_args}
 			RESULT_VARIABLE _build_result
 			OUTPUT_VARIABLE _build_output
 			ERROR_VARIABLE  _build_output
@@ -633,7 +647,7 @@ function(spm_require_package)
 		${_force_flag}
 		${_shared_flag}
 	)
-
+	set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
 	if(NOT TARGET ${_effective_import_name} AND NOT TARGET ${_effective_import_name}::${_effective_import_name})
 		_spm_log(
 			"Note: no target named '${_effective_import_name}' or "
