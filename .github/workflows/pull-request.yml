@@ -86,16 +86,35 @@ jobs:
           fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
 
-      - name: Install SDL build dependencies
-        if: runner.os == 'Linux'
+      - name: Install recipe system dependencies
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
-            libxfixes-dev libxi-dev libxss-dev libxtst-dev \
-            libxkbcommon-dev \
-            libwayland-dev libdecor-0-dev wayland-protocols
+          DEPS_FILE="${{ matrix.package }}/SystemDeps"
+          if [ ! -f "$DEPS_FILE" ]; then
+            echo "No SYSTEM_DEPS for ${{ matrix.package }}"
+            exit 0
+          fi
+          case "${{ runner.os }}" in
+            Linux)
+              PKGS=$(grep -E '^apt:' "$DEPS_FILE" | sed 's/^apt://')
+              if [ -n "$PKGS" ]; then
+                sudo apt-get update
+                sudo apt-get install -y $PKGS
+              fi
+              ;;
+            macOS)
+              PKGS=$(grep -E '^brew:' "$DEPS_FILE" | sed 's/^brew://')
+              if [ -n "$PKGS" ]; then
+                brew install $PKGS
+              fi
+              ;;
+            Windows)
+              PKGS=$(grep -E '^choco:' "$DEPS_FILE" | sed 's/^choco://')
+              if [ -n "$PKGS" ]; then
+                choco install -y $PKGS
+              fi
+              ;;
+          esac
 
       - name: Configure (fetch + build + test the recipe)
         if: steps.platform_check.outputs.skip != 'true'
