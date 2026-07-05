@@ -9,3 +9,4 @@ apt:libxi-dev
 apt:libxss-dev
 apt:libxkbcommon-dev
 apt:libwayland-dev
+apt:libxinerama-dev
