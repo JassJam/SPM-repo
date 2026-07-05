@@ -1,14 +1,5 @@
 # ============================================================
-# SPM - a tiny package manager for CMake
-#
-# packages/repositories/<l>/<n>/<version>/CMakeLists.txt
-#        the RECIPE: how to fetch source and build it.
-#        Never add_subdirectory()'d into your project. Run as
-#        an isolated configure+build+install at setup time.
-#
-# packages/cache/<l>/<n>/<hash>/
-#        the INSTALLED, PRECOMPILED result of running a recipe.
-#        This is what becomes the CMake target you link against.
+# SPM - Simple Package Manager
 # ============================================================
 
 cmake_minimum_required(VERSION 3.21)
@@ -513,8 +504,6 @@ function(spm_clean_cache)
 endfunction()
 
 # ------------------------------------------------------------
-# Public entry point.
-#
 # spm_require_package(
 #   NAME       spdlog
 #   VERSION    1.14.1
