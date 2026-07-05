@@ -1,14 +1,5 @@
 # ============================================================
-# SPM - a tiny package manager for CMake
-#
-# packages/repositories/<l>/<n>/<version>/CMakeLists.txt
-#        the RECIPE: how to fetch source and build it.
-#        Never add_subdirectory()'d into your project. Run as
-#        an isolated configure+build+install at setup time.
-#
-# packages/cache/<l>/<n>/<hash>/
-#        the INSTALLED, PRECOMPILED result of running a recipe.
-#        This is what becomes the CMake target you link against.
+# SPM - Simple Package Manager
 # ============================================================
 
 cmake_minimum_required(VERSION 3.21)
@@ -358,6 +349,16 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 			endif()
 		endforeach()
 
+		foreach(_var
+			SPM_CACHE_DIRECTORY SPM_PACKAGES_DIR
+			SPM_REGISTRY SPM_REGISTRY_REF SPM_REGISTRY_HEADERS
+			SPM_PARALLEL_JOBS SPM_SKIP_TESTS SPM_VERBOSE_OUTPUT
+		)
+			if(DEFINED ${_var})
+				list(APPEND _toolchain_args -D${_var}=${${_var}})
+			endif()
+		endforeach()
+
 		execute_process(
 			COMMAND ${CMAKE_COMMAND}
 					-S "${recipe_dir}" -B "${_build_dir}"
@@ -440,7 +441,9 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 
 	# --- Expose the cached, precompiled result as a CMake target -----------
 
-	# If the recipe has IMPORT.cmake, use it to import the recipe.
+	list(APPEND CMAKE_PREFIX_PATH "${_cache_dir}")
+	set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
+
 	set(_import_script "${recipe_dir}/Import.cmake")
 	if(EXISTS "${_import_script}")
 		set(SPM_IMPORT_NAME "${_import_name}")
@@ -501,8 +504,6 @@ function(spm_clean_cache)
 endfunction()
 
 # ------------------------------------------------------------
-# Public entry point.
-#
 # spm_require_package(
 #   NAME       spdlog
 #   VERSION    1.14.1
