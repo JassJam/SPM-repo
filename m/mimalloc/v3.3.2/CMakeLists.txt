@@ -38,11 +38,11 @@ set(MI_LIBC_MUSL         OFF CACHE BOOL "Enable this when linking with musl libc
 
 set(MI_PADDING           OFF CACHE BOOL "Enable padding to detect heap block overflow (always on in DEBUG or SECURE mode, or with Valgrind/ASAN)" FORCE)
 set(MI_SKIP_COLLECT_ON_EXIT OFF CACHE BOOL "Skip collecting memory on program exit" FORCE)
-set(MI_NO_PADDING        OFF CACHE BOOL"Force no use of padding even in DEBUG mode etc." FORCE)
-set(MI_INSTALL_TOPLEVEL  OFF CACHE BOOL"Install directly into $CMAKE_INSTALL_PREFIX instead of PREFIX/lib/mimalloc-version" FORCE)
-set(MI_NO_THP            OFF CACHE BOOL"Disable transparent huge pages support on Linux/Android for the mimalloc process only" FORCE)
+set(MI_NO_PADDING        OFF CACHE BOOL "Force no use of padding even in DEBUG mode etc." FORCE)
+set(MI_INSTALL_TOPLEVEL  OFF CACHE BOOL "Install directly into $CMAKE_INSTALL_PREFIX instead of PREFIX/lib/mimalloc-version" FORCE)
+set(MI_NO_THP            OFF CACHE BOOL "Disable transparent huge pages support on Linux/Android for the mimalloc process only" FORCE)
 set(MI_EXTRA_CPPDEFS     "" CACHE STRING "Extra pre-processor definitions (use as `-DMI_EXTRA_CPPDEFS=\"opt1=val1;opt2=val2\"`)" FORCE)
-set(MI_SEE_ASM           OFF CACHE BOOL"Generate assembly files" FORCE)
+set(MI_SEE_ASM           OFF CACHE BOOL "Generate assembly files" FORCE)
 
 # negated options for vcpkg features
 set(MI_NO_USE_CXX        OFF CACHE BOOL "Use plain C compilation (has priority over MI_USE_CXX)" FORCE)
