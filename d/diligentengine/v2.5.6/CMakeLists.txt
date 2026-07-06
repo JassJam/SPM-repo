@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.21)
 project(diligentengine_pkg)
 include(${SPM_ROOT}/spm.cmake)
 
+spm_fetch_source(GIT_URL https://github.com/DiligentGraphics/DiligentEngine.git GIT_TAG v2.5.6)
+
 set(install_pdb ON)
 if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
 	set(install_pdb OFF)
@@ -13,7 +15,5 @@ set(DILIGENT_INSTALL_FX ON CACHE BOOL "Install FX module." FORCE)
 set(DILIGENT_INSTALL_SAMPLES ON CACHE BOOL "Install Samples module." FORCE)
 set(DILIGENT_INSTALL_PDB ${install_pdb} CACHE BOOL "Install program debug module." FORCE)
 set(DILIGENT_NO_FORMAT_VALIDATION OFF CACHE BOOL "" FORCE)
-
-spm_fetch_source(GIT_URL https://github.com/DiligentGraphics/DiligentEngine.git GIT_TAG v2.5.6)
 
 add_subdirectory(${SPM_PKG_SOURCE_DIR} src)
