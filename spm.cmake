@@ -1,7 +1,3 @@
-# ============================================================
-# SPM - Simple Package Manager
-# ============================================================
-
 cmake_minimum_required(VERSION 3.21)
 
 if(DEFINED SPM_CMAKE_INCLUDED)
@@ -76,7 +72,6 @@ define_property(GLOBAL PROPERTY SPM_REQUIRED_PACKAGES
 	BRIEF_DOCS "name@version pairs already resolved by SPM"
 	FULL_DOCS  "Used to dedupe and detect version conflicts across the tree")
 
-# ------------------------------------------------------------
 # Locate the RECIPE directory for name@version.
 #   packages/repositories/<l>/<n>/<version>/CMakeLists.txt
 # If missing locally and SPM_REMOTE is ON, resolve it from `registry`:
@@ -91,7 +86,6 @@ define_property(GLOBAL PROPERTY SPM_REQUIRED_PACKAGES
 # Either way, a version directory already existing under
 # SPM_PACKAGES_DIR short-circuits everything below — no re-fetch,
 # no re-clone, no re-copy, regardless of which mode produced it.
-# ------------------------------------------------------------
 function(_spm_resolve_recipe_dir name version registry ref headers out_dir)
 	if(NOT version)
 		_spm_log_fatal("VERSION is required to resolve a recipe for '${name}'")
@@ -232,12 +226,10 @@ function(_spm_list_local_versions name out_var)
 	set(${out_var} "${_versions}" PARENT_SCOPE)
 endfunction()
 
-# ------------------------------------------------------------
 # Hash identifying one specific BUILD of a recipe: the pin
 # (version/git ref/url+hash/config overrides) AND the toolchain
 # (compiler/build type), so the cache busts automatically if
 # either the pin or the toolchain changes.
-# ------------------------------------------------------------
 function(_spm_get_build_hash name version git_url git_tag url url_hash configs build_type build_shared out_hash)
 	string(SHA256 _hash
 		"${name}-${version}-${git_url}-${git_tag}-${url}-${url_hash}-${configs}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${build_type}-${build_shared}-${CMAKE_GENERATOR}")
@@ -322,15 +314,7 @@ set(SPM_PKG_HASH [==[${B_HASH}]==] CACHE INTERNAL \"\")
 set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 ")
 		foreach(_cfg ${B_CONFIGS})
-			string(FIND "${_cfg}" "=" _eq_pos)
-			if(_eq_pos EQUAL -1)
-				_spm_log_fatal(
-					"Invalid CONFIGS entry '${_cfg}' for '${name}@${version}' — expected KEY=VALUE")
-			endif()
-			string(SUBSTRING "${_cfg}" 0 ${_eq_pos} _cfg_key)
-			math(EXPR _cfg_val_start "${_eq_pos} + 1")
-			string(SUBSTRING "${_cfg}" ${_cfg_val_start} -1 _cfg_value)
-			file(APPEND "${_input_script}" "set(${_cfg_key} [==[${_cfg_value}]==] CACHE STRING \"\" FORCE)\n")
+			file(APPEND "${_input_script}" "set(${_cfg} CACHE INTERNAL \"\" FORCE)\n")
 		endforeach()
 
 		_spm_log("Configuring '${name}@${version}' (${_hash})")
@@ -453,8 +437,6 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
 		file(WRITE "${_stamp_file}" "ok")
 	endif()
 
-	# --- Expose the cached, precompiled result as a CMake target -----------
-
 	list(APPEND CMAKE_PREFIX_PATH "${_cache_dir}")
 	set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
 
@@ -517,7 +499,6 @@ function(spm_clean_cache)
 	endif()
 endfunction()
 
-# ------------------------------------------------------------
 # spm_require_package(
 #   NAME       spdlog
 #   VERSION    1.14.1
@@ -553,7 +534,6 @@ endfunction()
 #              # as CMake package "absl", so pass IMPORT_NAME absl.
 #              # Defaults to NAME if not given.
 # )
-# ------------------------------------------------------------
 function(spm_require_package)
 	set(options RUN_TESTS FORCE SHARED)
 	set(oneValArgs NAME VERSION DIRECTORY REGISTRY REGISTRY_REF GIT_URL GIT_TAG URL HASH IMPORT_NAME)
@@ -647,7 +627,6 @@ function(spm_require_package)
 		${_force_flag}
 		${_shared_flag}
 	)
-	set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
 	if(NOT TARGET ${_effective_import_name} AND NOT TARGET ${_effective_import_name}::${_effective_import_name})
 		_spm_log(
 			"Note: no target named '${_effective_import_name}' or "
@@ -658,13 +637,11 @@ function(spm_require_package)
 	endif()
 endfunction()
 
-# ------------------------------------------------------------
 # Called FROM A RECIPE (running as its own isolated project) to
 # fetch upstream source: either GIT_URL/GIT_TAG (git clone), or
 # URL/HASH (download + hash validated). Caller overrides passed
 # down from spm_require_package() (SPM_PKG_*) win over the
 # recipe's own defaults given here.
-# ------------------------------------------------------------
 function(spm_fetch_source)
 	set(oneValArgs GIT_URL GIT_TAG URL HASH)
 	cmake_parse_arguments(DEF "" "${oneValArgs}" "" ${ARGN})

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(mimalloc_pkg)
+project(libsdl3_pkg)
 include(${SPM_ROOT}/spm.cmake)
 
 spm_fetch_source(GIT_URL https://github.com/libsdl-org/SDL.git GIT_TAG release-3.4.12)
