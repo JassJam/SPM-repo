@@ -91,7 +91,7 @@ jobs:
         run: |
           DEPS_FILE="${{ matrix.package }}/SystemDeps"
           if [ ! -f "$DEPS_FILE" ]; then
-            echo "No SYSTEM_DEPS for ${{ matrix.package }}"
+            echo "No system deps for ${{ matrix.package }}"
             exit 0
           fi
           case "${{ runner.os }}" in
