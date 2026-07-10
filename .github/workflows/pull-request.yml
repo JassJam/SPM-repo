@@ -144,3 +144,12 @@ jobs:
             build/_spm/**/CMakeFiles/CMakeError.log
             build/_spm/**/CMakeFiles/CMakeOutput.log
           if-no-files-found: ignore
+
+      - name: Upload failed build on failure
+        if: failure() && steps.platform_check.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: spm-build-${{ matrix.os }}-${{ matrix.link }}-${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}
+          path: build
+          if-no-files-found: ignore
+          retention-days: 7
