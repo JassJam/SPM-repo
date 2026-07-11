@@ -94,14 +94,14 @@ jobs:
           fi
           case "${{ runner.os }}" in
             Linux)
-              PKGS=$(grep -E '^apt:' "$DEPS_FILE" | sed 's/^apt://')
+              PKGS=$(grep -E '^apt:' "$DEPS_FILE" | sed 's/^apt://' || true)
               if [ -n "$PKGS" ]; then
                 sudo apt-get update
                 sudo apt-get install -y $PKGS
               fi
               ;;
             macOS)
-              PKGS=$(grep -E '^brew:' "$DEPS_FILE" | sed 's/^brew://')
+              PKGS=$(grep -E '^brew:' "$DEPS_FILE" | sed 's/^brew://' || true)
               if [ -n "$PKGS" ]; then
                 brew install $PKGS
               fi
