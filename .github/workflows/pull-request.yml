@@ -22,6 +22,7 @@ jobs:
         id: changes
         shell: bash
         run: |
+          set -euo pipefail
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || true)
@@ -67,6 +68,7 @@ jobs:
         id: pkg
         shell: bash
         run: |
+          set -euo pipefail
           IFS='/' read -r LETTER NAME VERSION <<< "${{ matrix.package }}"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -107,7 +109,7 @@ jobs:
               fi
               ;;
             Windows)
-              PKGS=$(grep -E '^choco:' "$DEPS_FILE" | sed 's/^choco://')
+              PKGS=$(grep -E '^choco:' "$DEPS_FILE" | sed 's/^choco://' || true)
               if [ -n "$PKGS" ]; then
                 choco install -y $PKGS
               fi
