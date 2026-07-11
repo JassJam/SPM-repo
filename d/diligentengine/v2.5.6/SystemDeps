@@ -14,3 +14,4 @@ apt:libncurses-dev
 apt:libopengl-dev
 apt:libglx-dev
 apt:libegl1-mesa-dev
+apt:libxinerama-dev
