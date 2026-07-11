@@ -13,3 +13,4 @@ apt:wayland-protocols
 apt:libncurses-dev
 apt:libopengl-dev
 apt:libglx-dev
+apt:libegl1-mesa-dev
