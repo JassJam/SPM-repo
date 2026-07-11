@@ -12,3 +12,4 @@ apt:libdecor-0-dev
 apt:wayland-protocols
 apt:libncurses-dev
 apt:libopengl-dev
+apt:libglx-dev
