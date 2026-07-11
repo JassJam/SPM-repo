@@ -10,4 +10,4 @@ apt:libxkbcommon-dev
 apt:libwayland-dev
 apt:libdecor-0-dev
 apt:wayland-protocols
-apt:libtinfo5
+apt:libncurses-dev
