@@ -1,5 +1,3 @@
-apt:libgl1-mesa-dev
-apt:libglu1-mesa-dev
 apt:libx11-dev
 apt:libxext-dev
 apt:libxrandr-dev
@@ -7,6 +5,9 @@ apt:libxcursor-dev
 apt:libxfixes-dev
 apt:libxi-dev
 apt:libxss-dev
+apt:libxtst-dev
 apt:libxkbcommon-dev
 apt:libwayland-dev
-apt:libxinerama-dev
+apt:libdecor-0-dev
+apt:wayland-protocols
+apt:libtinfo5
