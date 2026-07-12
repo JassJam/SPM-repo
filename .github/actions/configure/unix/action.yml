@@ -1,0 +1,26 @@
+inputs:
+  config-name:
+    description: "Name of the configuration preset to use for the build"
+    required: true
+  config-os:
+    description: "Operating system to use for the build"
+    required: true
+  config-preset:
+    description: "Configuration preset to use for the build"
+    required: true
+  config-output:
+    description: "Output directory for the build artifacts"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      shell: bash
+      run: sudo apt-get install -y clang-18 gcc-multilib g++-multilib
+
+    - name: Install dependencies
+      shell: bash
+      run: sudo apt-get install -y g++-14 gcc-multilib g++-multilib

@@ -1,11 +1,12 @@
-name: Test packages
+name: Test Packages
 
 on:
+  push:
+    branches: [main, dev]
+    tags:
+      - "*"
   pull_request:
-
-concurrency:
-  group: test-packages-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+    branches: [main, dev]
 
 jobs:
   detect-changes:
@@ -46,24 +47,85 @@ jobs:
           printf '%s' "$EXISTING"
 
   test-package:
+    name: Test (${{ matrix.config.name }})
+    runs-on: ${{ matrix.config.os }}
     needs: detect-changes
     if: needs.detect-changes.outputs.has_packages == 'true'
+    timeout-minutes: 30
     strategy:
-      fail-fast: false
+      fail-fast: true
+      max-parallel: 4
       matrix:
-        os:
-          - ubuntu-latest # linux x86_64
-          - ubuntu-24.04-arm # linux arm64
-          - windows-latest # windows x86_64
-          - macos-latest # macos arm64 (Apple Silicon)
+        config:
+          # Linux / Clang
+          - name: linux-x64-clang
+            os: ubuntu-latest
+            preset: unixlike-x64-clang-release
+            output: linux-x64-clang
+            configure-file: linux
+          - name: linux-x86-clang
+            os: ubuntu-latest
+            preset: unixlike-x86-clang-release
+            output: linux-x86-clang
+            configure-file: linux
+
+          # # Linux / GCC
+          # - name: linux-x64-gcc
+          #   os: ubuntu-latest
+          #   preset: unixlike-x64-gcc-release
+          #   output: linux-x64-gcc
+          #   configure-file: linux
+          # - name: linux-x86-gcc
+          #   os: ubuntu-latest
+          #   preset: unixlike-x86-gcc-release
+          #   output: linux-x86-gcc
+          #   configure-file: linux
+
+          # # macOS / Clang
+          # - name: macos-x64-clang
+          #   os: macos-latest
+          #   preset: unixlike-x64-clang-release
+          #   output: macos-x64-clang
+          #   configure-file: macos
+          # - name: macos-arm64-clang
+          #   os: macos-latest
+          #   preset: unixlike-x64-clang-release
+          #   output: macos-arm64-clang
+          #   configure-file: macos
+
+          # # macOS / GCC
+          # - name: macos-x64-gcc
+          #   os: macos-latest
+          #   preset: unixlike-x64-gcc-release
+          #   output: macos-x64-gcc
+          #   configure-file: macos
+
+          # # Windows / MSVC
+          # - name: windows-x64-msvc
+          #   os: windows-latest
+          #   preset: windows-x64-msvc-release
+          #   output: windows-x64-msvc
+          #   configure-file: windows
+          # - name: windows-x86-msvc
+          #   os: windows-latest
+          #   preset: windows-x86-msvc-release
+          #   output: windows-x86-msvc
+          #   configure-file: windows
+
+          # # Windows / Clang
+          # - name: windows-x64-clang
+          #   os: windows-latest
+          #   preset: windows-clang-release
+          #   output: windows-x64-clang
+          #   configure-file: windows
         link: [static, shared]
         package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
-    runs-on: ${{ matrix.os }}
-    name: ${{ matrix.os }} / ${{ matrix.link }} / ${{ matrix.package }}
-    timeout-minutes: 30
+        cxx: [23]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Parse package name/version
         id: pkg
         shell: bash
@@ -73,70 +135,32 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Check platform support
-        id: platform_check
-        shell: bash
-        run: |
-          OUTPUT=$(cmake -DRECIPE_DIR="${{ matrix.package }}" -P ci/test-harness/unsupported.cmake)
-          SKIP=false
-          if echo "$OUTPUT" | grep -q '^SPM_UNSUPPORTED:'; then
-            SKIP=true
-            REASON=$(echo "$OUTPUT" | sed -n 's/^SPM_UNSUPPORTED://p')
-            echo "::notice::Skipping ${{ matrix.package }} on ${{ matrix.os }} — $REASON"
-          fi
-          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+      - name: Setup ${{ matrix.config.name }}
+        uses: ./.github/actions/configure/${{ matrix.config.configure-file }}
 
-      - name: Install recipe system dependencies
-        shell: bash
-        run: |
-          DEPS_FILE="${{ matrix.package }}/SystemDeps"
-          if [ ! -f "$DEPS_FILE" ]; then
-            echo "No system deps for ${{ matrix.package }}"
-            exit 0
-          fi
-          case "${{ runner.os }}" in
-            Linux)
-              PKGS=$(grep -E '^apt:' "$DEPS_FILE" | sed 's/^apt://' || true)
-              if [ -n "$PKGS" ]; then
-                sudo apt-get update
-                sudo apt-get install -y $PKGS
-              fi
-              ;;
-            macOS)
-              PKGS=$(grep -E '^brew:' "$DEPS_FILE" | sed 's/^brew://' || true)
-              if [ -n "$PKGS" ]; then
-                brew install $PKGS
-              fi
-              ;;
-            Windows)
-              PKGS=$(grep -E '^choco:' "$DEPS_FILE" | sed 's/^choco://' || true)
-              if [ -n "$PKGS" ]; then
-                choco install -y $PKGS
-              fi
-              ;;
-          esac
+      - name: Install CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: "3.30.0"
 
-      - name: Configure (fetch + build + test the recipe)
-        if: steps.platform_check.outputs.skip != 'true'
+      - name: Configure ${{ matrix.config.name }}
         shell: bash
         run: |
           SHARED_FLAG=OFF
           if [ "${{ matrix.link }}" = "shared" ]; then
             SHARED_FLAG=ON
           fi
-          cmake -S ci/test-harness -B build \
-          	-DCMAKE_CXX_STANDARD=23 \
+          cmake -S .github -B build --preset ${{ matrix.config.preset }} \
+          	-DCMAKE_CXX_STANDARD=${{ matrix.cxx }} \
             -DSPM_TEST_PACKAGE_NAME="${{ steps.pkg.outputs.name }}" \
             -DSPM_TEST_PACKAGE_VERSION="${{ steps.pkg.outputs.version }}" \
             -DSPM_TEST_SHARED="$SHARED_FLAG"
 
-      - name: Build (drives the recipe's isolated build)
-        if: steps.platform_check.outputs.skip != 'true'
+      - name: Build ${{ matrix.config.name }}
         shell: bash
         run: cmake --build build --config Release
 
       - name: Upload logs on failure
-        if: failure() && steps.platform_check.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: spm-logs-${{ matrix.os }}-${{ matrix.link }}-${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}
@@ -144,12 +168,3 @@ jobs:
             build/_spm/**/CMakeFiles/CMakeError.log
             build/_spm/**/CMakeFiles/CMakeOutput.log
           if-no-files-found: ignore
-
-      - name: Upload failed build on failure
-        if: failure() && steps.platform_check.outputs.skip != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: spm-build-${{ matrix.os }}-${{ matrix.link }}-${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}
-          path: build
-          if-no-files-found: ignore
-          retention-days: 7
