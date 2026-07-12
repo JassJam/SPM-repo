@@ -131,7 +131,8 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Setup ${{ matrix.config.name }}
-        uses: ./.github/actions/configure/${{ matrix.config.configure-file }}
+        uses: ./.github/actions/configure/unix
+        if: contains(matrix.config.os, 'ubuntu')
 
       - name: Install CMake
         uses: jwlawson/actions-setup-cmake@v2
