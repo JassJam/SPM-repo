@@ -5,7 +5,7 @@ if(NOT SPM_TEST_PACKAGE_NAME OR NOT SPM_TEST_PACKAGE_VERSION)
 	message(FATAL_ERROR "SPM_TEST_PACKAGE_NAME and SPM_TEST_PACKAGE_VERSION must be set (-D on the command line)")
 endif()
 
-set(_spm_repo_root "${CMAKE_CURRENT_LIST_DIR}/../..")
+set(_spm_repo_root "${CMAKE_CURRENT_LIST_DIR}/..")
 include(${_spm_repo_root}/spm.cmake)
 
 string(SUBSTRING "${SPM_TEST_PACKAGE_NAME}" 0 1 _letter)
