@@ -133,6 +133,8 @@ jobs:
       - name: Setup ${{ matrix.config.name }}
         uses: ./.github/actions/configure/unix
         if: contains(matrix.config.os, 'ubuntu')
+        with:
+          package: ${{ matrix.package }}
 
       - name: Install CMake
         uses: jwlawson/actions-setup-cmake@v2
