@@ -9,21 +9,21 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: sudo apt-get install -y clang-18 gcc-multilib g++-multilib
-
-    - name: Install dependencies
-      shell: bash
-      run: sudo apt-get install -y g++-14 gcc-multilib g++-multilib
+      run: sudo apt-get install -y g++-14 clang-18 gcc-multilib g++-multilib pkg-config
 
     - name: Install recipe system dependencies
       shell: bash
       run: |
         DEPS_FILE="${{ inputs.package }}/SystemDeps"
+        echo "Looking for deps file at: $DEPS_FILE"
+        ls -la "${{ inputs.package }}" || echo "package dir doesn't exist"
         if [ ! -f "$DEPS_FILE" ]; then
           echo "No system deps for ${{ inputs.package }}"
           exit 0
         fi
+        cat "$DEPS_FILE"
         PKGS=$(grep -E '^apt:' "$DEPS_FILE" | sed 's/^apt://' || true)
+        echo "Resolved packages: $PKGS"
         if [ -n "$PKGS" ]; then
           sudo apt-get update
           sudo apt-get install -y $PKGS
