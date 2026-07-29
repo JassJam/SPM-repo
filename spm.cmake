@@ -304,14 +304,13 @@ function(_spm_get_build_hash OUT_HASH)
     endif()
   endforeach()
 
-  message(STATUS "key: ${key}")
   string(SHA256 _hash "${key}")
   set(${OUT_HASH}
       "${_hash}"
       PARENT_SCOPE)
 endfunction()
 
-function(_spm_run_tests)
+macro(_spm_run_tests)
   set(oneValArgs
       NAME
       IMPORT_NAME
@@ -359,9 +358,9 @@ function(_spm_run_tests)
     endif()
     _spm_log("Tests passed for '${B_NAME}@${B_VERSION}'")
   endif()
-endfunction()
+endmacro()
 
-function(_spm_run_install)
+macro(_spm_run_install)
   set(oneValArgs
       NAME
       IMPORT_NAME
@@ -404,9 +403,9 @@ function(_spm_run_install)
       "when consumed via add_subdirectory() unless explicitly told to install)."
     )
   endif()
-endfunction()
+endmacro()
 
-function(_spm_run_import)
+macro(_spm_run_import)
   set(oneValArgs NAME IMPORT_NAME VERSION RECIPE_DIR CACHE_DIR SHARED)
   cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
 
@@ -420,7 +419,49 @@ function(_spm_run_import)
     include("${_import_script}")
   endif()
 
-endfunction()
+  find_package(${B_IMPORT_NAME} QUIET CONFIG PATHS "${B_CACHE_DIR}"
+               NO_DEFAULT_PATH)
+  if(${B_IMPORT_NAME}_FOUND)
+    # Multi-component packages (Abseil, Boost, ICU, ...) expose many targets
+    _spm_log(
+      "'${B_IMPORT_NAME}' provides a CMake package config, imported via find_package()"
+    )
+    return()
+  endif()
+
+  find_library(
+    _spm_${B_IMPORT_NAME}_LIB
+    NAMES ${B_IMPORT_NAME} lib${B_IMPORT_NAME}
+    PATHS "${B_CACHE_DIR}/lib" "${B_CACHE_DIR}/lib64"
+    NO_DEFAULT_PATH)
+  if(NOT _spm_${B_IMPORT_NAME}_LIB)
+    _spm_log_fatal(
+      "Could not locate a compiled library for '${_import_name}' under ${B_CACHE_DIR}. "
+      "If this package's real CMake package/target name differs from its recipe name "
+      "(e.g. the 'abseil' recipe installs as CMake package 'absl'), pass "
+      "IMPORT_NAME to spm_require_package() to point at the real name. If the package "
+      "exposes multiple component targets with no single unified library, add an "
+      "IMPORT.cmake file next to the recipe's CMakeLists.txt to handle it explicitly."
+    )
+  endif()
+
+  if(_pkg_build_shared STREQUAL "ON")
+    set(_imported_kind SHARED)
+  else()
+    set(_imported_kind STATIC)
+  endif()
+
+  if(NOT TARGET ${B_IMPORT_NAME})
+    add_library(${B_IMPORT_NAME} ${_imported_kind} IMPORTED GLOBAL)
+    set_target_properties(
+      ${B_IMPORT_NAME}
+      PROPERTIES IMPORTED_LOCATION "${_spm_${B_IMPORT_NAME}_LIB}"
+                 INTERFACE_INCLUDE_DIRECTORIES "${B_CACHE_DIR}/include")
+    _spm_log(
+      "Registered ${_imported_kind} IMPORTED target '${B_IMPORT_NAME}' -> ${_spm_${B_IMPORT_NAME}_LIB}"
+    )
+  endif()
+endmacro()
 
 # Build+install a recipe as an isolated, out-of-tree CMake project (its own
 # configure/build/install), cache the result under
@@ -633,54 +674,11 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
     IMPORT_NAME
     ${_import_name}
     RECIPE_DIR
-    ${_recipe_dir}
+    ${recipe_dir}
     CACHE_DIR
     ${_cache_dir}
     SHARED
     ${_pkg_build_shared})
-
-  find_package(${_import_name} QUIET CONFIG PATHS "${_cache_dir}"
-               NO_DEFAULT_PATH)
-  if(${_import_name}_FOUND)
-    # Multi-component packages (Abseil, Boost, ICU, ...) expose many targets
-    _spm_log(
-      "'${_import_name}' provides a CMake package config, imported via find_package()"
-    )
-    return()
-  endif()
-
-  find_library(
-    _spm_${_import_name}_LIB
-    NAMES ${_import_name} lib${_import_name}
-    PATHS "${_cache_dir}/lib" "${_cache_dir}/lib64"
-    NO_DEFAULT_PATH)
-  if(NOT _spm_${_import_name}_LIB)
-    _spm_log_fatal(
-      "Could not locate a compiled library for '${_import_name}' under ${_cache_dir}. "
-      "If this package's real CMake package/target name differs from its recipe name "
-      "(e.g. the 'abseil' recipe installs as CMake package 'absl'), pass "
-      "IMPORT_NAME to spm_require_package() to point at the real name. If the package "
-      "exposes multiple component targets with no single unified library, add an "
-      "IMPORT.cmake file next to the recipe's CMakeLists.txt to handle it explicitly."
-    )
-  endif()
-
-  if(_pkg_build_shared STREQUAL "ON")
-    set(_imported_kind SHARED)
-  else()
-    set(_imported_kind STATIC)
-  endif()
-
-  if(NOT TARGET ${_import_name})
-    add_library(${_import_name} ${_imported_kind} IMPORTED GLOBAL)
-    set_target_properties(
-      ${_import_name}
-      PROPERTIES IMPORTED_LOCATION "${_spm_${_import_name}_LIB}"
-                 INTERFACE_INCLUDE_DIRECTORIES "${_cache_dir}/include")
-    _spm_log(
-      "Registered ${_imported_kind} IMPORTED target '${_import_name}' -> ${_spm_${_import_name}_LIB}"
-    )
-  endif()
 endfunction()
 
 function(spm_clean_cache)
