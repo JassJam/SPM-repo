@@ -417,6 +417,7 @@ macro(_spm_run_import)
     set(SPM_IMPORT_SHARED "${B_SHARED}")
     _spm_log("Running Import.cmake for '${B_NAME}@${B_VERSION}'")
     include("${_import_script}")
+    return()
   endif()
 
   find_package(${B_IMPORT_NAME} QUIET CONFIG PATHS "${B_CACHE_DIR}"
