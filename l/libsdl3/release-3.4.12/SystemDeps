@@ -9,4 +9,4 @@ apt:libxtst-dev
 apt:libxkbcommon-dev
 apt:libwayland-dev
 apt:libdecor-0-dev
-apt:wayland-protocols
+apt-noarch:wayland-protocols

@@ -1,15 +1,26 @@
 inputs:
   package:
     required: true
+  arch:
+    required: true
 
 runs:
   using: "composite"
   steps:
     - uses: actions/checkout@v4
 
+    - name: Enable i386 architecture
+      if: contains(inputs.arch, 'x86') && !contains(inputs.arch, 'x64')
+      shell: bash
+      run: |
+        sudo dpkg --add-architecture i386
+        echo "Enabled i386 arch for ${{ inputs.arch }}"
+
     - name: Install dependencies
       shell: bash
-      run: sudo apt-get install -y g++-14 clang-18 gcc-multilib g++-multilib pkg-config
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y g++-14 clang-18 gcc-multilib g++-multilib pkg-config
 
     - name: Install recipe system dependencies
       shell: bash
@@ -22,9 +33,17 @@ runs:
           exit 0
         fi
         cat "$DEPS_FILE"
-        PKGS=$(grep -E '^apt:' "$DEPS_FILE" | sed 's/^apt://' || true)
+
+        ARCH_PKGS=$(grep -E '^apt:' "$DEPS_FILE" | sed 's/^apt://' || true)
+        NOARCH_PKGS=$(grep -E '^apt-noarch:' "$DEPS_FILE" | sed 's/^apt-noarch://' || true)
+
+        if [[ "${{ inputs.arch }}" == *x86* && "${{ inputs.arch }}" != *x64* ]]; then
+          ARCH_PKGS=$(echo "$ARCH_PKGS" | sed -E 's/([a-zA-Z0-9.+_-]+)/\1:i386/g')
+        fi
+
+        PKGS="$ARCH_PKGS $NOARCH_PKGS"
         echo "Resolved packages: $PKGS"
-        if [ -n "$PKGS" ]; then
+        if [ -n "$(echo "$PKGS" | xargs)" ]; then
           sudo apt-get update
           sudo apt-get install -y $PKGS
         fi

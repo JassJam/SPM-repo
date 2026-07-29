@@ -134,6 +134,7 @@ jobs:
         if: contains(matrix.config.os, 'ubuntu')
         with:
           package: ${{ matrix.package }}
+          arch: ${{ matrix.config.output }}
 
       - name: Install CMake
         uses: jwlawson/actions-setup-cmake@v2
