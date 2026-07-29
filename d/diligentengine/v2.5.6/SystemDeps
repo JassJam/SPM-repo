@@ -9,9 +9,9 @@ apt:libxtst-dev
 apt:libxkbcommon-dev
 apt:libwayland-dev
 apt:libdecor-0-dev
-apt:wayland-protocols
 apt:libncurses-dev
 apt:libopengl-dev
 apt:libglx-dev
 apt:libegl1-mesa-dev
 apt:libxinerama-dev
+apt-noarch:wayland-protocols
