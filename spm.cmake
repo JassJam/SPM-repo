@@ -558,6 +558,11 @@ function(_spm_build_and_import name version recipe_dir)
       _spm_load_default_patches(B_PATCHES)
     endif()
 
+    foreach(ptch ${B_PATCHES})
+        message(STATUS "ptch: ${ptch}")
+    endforeach()
+    
+
     # Feed the recipe its inputs via an initial-cache script
     set(_input_script "${_build_dir}/spm-input.cmake")
     file(
