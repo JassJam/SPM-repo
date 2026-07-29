@@ -464,7 +464,7 @@ macro(_spm_run_import)
   endif()
 endmacro()
 
-macro(_spm_load_default_patches out_var)
+function(_spm_load_default_patches out_var)
   set(oneValArgs RECIPE_DIR)
   cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
 
@@ -475,15 +475,14 @@ macro(_spm_load_default_patches out_var)
       LIST_DIRECTORIES FALSE
       "${_recipe_patches_dir}/*.patch" "${_recipe_patches_dir}/*.diff")
     if(_discovered_patches)
+      message(STATUS "_discovered_patches: ${_discovered_patches}")
       list(SORT _discovered_patches)
       set(${out_var}
           "${_discovered_patches}"
           PARENT_SCOPE)
-      _spm_log("No patches specified for '${name}@${version}', auto-discovered "
-               "${_discovered_patches} in ${_recipe_patches_dir}")
     endif()
   endif()
-endmacro()
+endfunction()
 
 # Build+install a recipe as an isolated, out-of-tree CMake project (its own
 # configure/build/install), cache the result under
@@ -555,13 +554,8 @@ function(_spm_build_and_import name version recipe_dir)
     file(MAKE_DIRECTORY "${_build_dir}")
 
     if(NOT B_PATCHES)
-      _spm_load_default_patches(B_PATCHES)
+      _spm_load_default_patches(B_PATCHES RECIPE_DIR ${recipe_dir})
     endif()
-
-    foreach(ptch ${B_PATCHES})
-        message(STATUS "ptch: ${ptch}")
-    endforeach()
-    
 
     # Feed the recipe its inputs via an initial-cache script
     set(_input_script "${_build_dir}/spm-input.cmake")
