@@ -90,6 +90,13 @@ macro(_spm_log)
   endif()
 endmacro()
 
+macro(_spm_execute_process)
+  if(SPM_VERBOSE_OUTPUT)
+    message(STATUS "[SPM]: Executing ${ARGV}.")
+  endif()
+  execute_process(${ARGV})
+endmacro()
+
 macro(_spm_log_fatal)
   message(FATAL_ERROR "[SPM]: ${ARGV}.")
 endmacro()
@@ -179,7 +186,7 @@ function(
     endif()
 
     _spm_log("Sparse-cloning '${_path_in_repo}' from ${_git_url}")
-    execute_process(
+    _spm_execute_process(
       COMMAND ${GIT_EXECUTABLE} ${_git_config_args} clone ${_clone_args}
               "${_git_url}" "${_scratch_dir}"
       RESULT_VARIABLE _git_result
@@ -190,7 +197,7 @@ function(
         "git clone failed for registry '${registry}':\n${_git_output}")
     endif()
 
-    execute_process(
+    _spm_execute_process(
       COMMAND ${GIT_EXECUTABLE} sparse-checkout set "${_path_in_repo}"
       WORKING_DIRECTORY "${_scratch_dir}"
       RESULT_VARIABLE _sparse_result
@@ -294,11 +301,8 @@ function(_spm_get_build_hash OUT_HASH)
     CMAKE_SYSTEM_PROCESSOR
     CMAKE_GENERATOR
     CMAKE_BUILD_TYPE
-    CMAKE_CXX_STANDARD
-    CMAKE_CXX_STANDARD_REQUIRED
-    CMAKE_CXX_EXTENSIONS
-    CMAKE_C_STANDARD
-    CMAKE_C_STANDARD_REQUIRED)
+    CMAKE_C_FLAGS
+    CMAKE_CXX_FLAGS)
     if(DEFINED ${_var})
       list(APPEND key ${_var}=${${_var}})
     endif()
@@ -345,7 +349,7 @@ macro(_spm_run_tests)
     )
   else()
     _spm_log("Running test suite for '${B_NAME}@${B_VERSION}'")
-    execute_process(
+    _spm_execute_process(
       COMMAND ${CTEST_EXECUTABLE} --test-dir "${B_BUILD_DIR}" -C ${B_BUILD_TYPE}
               --output-on-failure
       RESULT_VARIABLE _test_result
@@ -384,7 +388,7 @@ macro(_spm_run_install)
     return()
   endif()
 
-  execute_process(
+  _spm_execute_process(
     COMMAND ${CMAKE_COMMAND} --install "${B_BUILD_DIR}" --config ${B_BUILD_TYPE}
     RESULT_VARIABLE _install_result
     OUTPUT_VARIABLE _install_output
@@ -407,7 +411,8 @@ endmacro()
 
 macro(_spm_run_import)
   set(oneValArgs NAME IMPORT_NAME VERSION RECIPE_DIR CACHE_DIR SHARED)
-  cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+  set(multiValArgs IMPORT_DEFINITIONS IMPORT_EXCLUDE)
+  cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
 
   set(_import_script "${B_RECIPE_DIR}/Import.cmake")
   if(EXISTS "${_import_script}")
@@ -415,6 +420,8 @@ macro(_spm_run_import)
     set(SPM_IMPORT_VERSION "${B_VERSION}")
     set(SPM_IMPORT_CACHE_DIR "${B_CACHE_DIR}")
     set(SPM_IMPORT_SHARED "${B_SHARED}")
+    set(SPM_IMPORT_DEFINITIONS "${IMPORT_DEFINITIONS}")
+    set(SPM_IMPORT_EXCLUDE "${IMPORT_EXCLUDE}")
     _spm_log("Running Import.cmake for '${B_NAME}@${B_VERSION}'")
     include("${_import_script}")
     return()
@@ -423,7 +430,6 @@ macro(_spm_run_import)
   find_package(${B_IMPORT_NAME} QUIET CONFIG PATHS "${B_CACHE_DIR}"
                NO_DEFAULT_PATH)
   if(${B_IMPORT_NAME}_FOUND)
-    # Multi-component packages (Abseil, Boost, ICU, ...) expose many targets
     _spm_log(
       "'${B_IMPORT_NAME}' provides a CMake package config, imported via find_package()"
     )
@@ -446,22 +452,26 @@ macro(_spm_run_import)
     )
   endif()
 
-  if(_pkg_build_shared STREQUAL "ON")
-    set(_imported_kind SHARED)
-  else()
-    set(_imported_kind STATIC)
-  endif()
+    if(_pkg_build_shared STREQUAL "ON")
+      set(_imported_kind SHARED)
+    else()
+      set(_imported_kind STATIC)
+    endif()
 
-  if(NOT TARGET ${B_IMPORT_NAME})
-    add_library(${B_IMPORT_NAME} ${_imported_kind} IMPORTED GLOBAL)
-    set_target_properties(
-      ${B_IMPORT_NAME}
-      PROPERTIES IMPORTED_LOCATION "${_spm_${B_IMPORT_NAME}_LIB}"
-                 INTERFACE_INCLUDE_DIRECTORIES "${B_CACHE_DIR}/include")
-    _spm_log(
-      "Registered ${_imported_kind} IMPORTED target '${B_IMPORT_NAME}' -> ${_spm_${B_IMPORT_NAME}_LIB}"
-    )
-  endif()
+    if(NOT TARGET ${B_IMPORT_NAME})
+      add_library(${B_IMPORT_NAME} ${_imported_kind} IMPORTED GLOBAL)
+      set_target_properties(
+        ${B_IMPORT_NAME}
+        PROPERTIES IMPORTED_LOCATION "${_spm_${B_IMPORT_NAME}_LIB}"
+                   INTERFACE_INCLUDE_DIRECTORIES "${B_CACHE_DIR}/include")
+      if(B_IMPORT_DEFINITIONS)
+        set_property(TARGET ${B_IMPORT_NAME} APPEND PROPERTY
+                     INTERFACE_COMPILE_DEFINITIONS ${B_IMPORT_DEFINITIONS})
+      endif()
+      _spm_log(
+        "Registered ${_imported_kind} IMPORTED target '${B_IMPORT_NAME}' -> ${_spm_${B_IMPORT_NAME}_LIB}"
+      )
+    endif()
 endmacro()
 
 function(_spm_load_default_patches out_var)
@@ -490,7 +500,7 @@ endfunction()
 function(_spm_build_and_import name version recipe_dir)
   set(options RUN_TESTS FORCE SHARED)
   set(oneValArgs GIT_URL GIT_TAG URL HASH IMPORT_NAME)
-  set(multiValArgs PATCHES CONFIGS)
+  set(multiValArgs PATCHES CONFIGS IMPORT_DEFINITIONS IMPORT_EXCLUDE)
   cmake_parse_arguments(B "${options}" "${oneValArgs}" "${multiValArgs}"
                         ${ARGN})
 
@@ -588,11 +598,6 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
       _var
       CMAKE_SYSTEM_NAME
       CMAKE_SYSTEM_PROCESSOR
-      CMAKE_CXX_STANDARD
-      CMAKE_CXX_STANDARD_REQUIRED
-      CMAKE_CXX_EXTENSIONS
-      CMAKE_C_STANDARD
-      CMAKE_C_STANDARD_REQUIRED
       CMAKE_C_FLAGS
       CMAKE_CXX_FLAGS)
       if(DEFINED ${_var})
@@ -615,7 +620,7 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
       endif()
     endforeach()
 
-    execute_process(
+    _spm_execute_process(
       COMMAND
         ${CMAKE_COMMAND} -S "${recipe_dir}" -B "${_build_dir}" -G
         "${CMAKE_GENERATOR}" -C "${_input_script}"
@@ -638,7 +643,8 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
     else()
       set(_build_target_args --target install)
     endif()
-    execute_process(
+    
+    _spm_execute_process(
       COMMAND
         ${CMAKE_COMMAND} --build "${_build_dir}" --config ${_pkg_build_type}
         --parallel ${SPM_PARALLEL_JOBS} ${_build_target_args}
@@ -691,6 +697,11 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
       "${CMAKE_PREFIX_PATH}"
       PARENT_SCOPE)
 
+  message(STATUS "Import: NAME: ${name}")
+  message(STATUS "Import: CACHE_DIR: ${CACHE_DIR}")
+  message(STATUS "Import: IMPORT_NAME: ${_import_name}")
+  message(STATUS "Import: RECIPE_DIR: ${recipe_dir}")
+  message(STATUS "Import: BUILD_DIR: ${_build_dir}")
   _spm_run_import(
     NAME
     ${name}
@@ -703,7 +714,11 @@ set(SPM_PKG_PATCHES [==[${B_PATCHES}]==] CACHE INTERNAL \"\")
     CACHE_DIR
     ${_cache_dir}
     SHARED
-    ${_pkg_build_shared})
+    ${_pkg_build_shared}
+    IMPORT_DEFINITIONS
+    ${B_IMPORT_DEFINITIONS}
+    IMPORT_EXCLUDE
+    ${B_IMPORT_EXCLUDE})
 endfunction()
 
 function(spm_clean_cache)
@@ -752,7 +767,7 @@ function(spm_require_package)
       URL
       HASH
       IMPORT_NAME)
-  set(multiValArgs PATCHES CONFIGS HEADERS)
+  set(multiValArgs PATCHES CONFIGS HEADERS IMPORT_DEFINITIONS IMPORT_EXCLUDE)
   cmake_parse_arguments(ARG "${options}" "${oneValArgs}" "${multiValArgs}"
                         ${ARGN})
 
@@ -855,6 +870,10 @@ function(spm_require_package)
     ${ARG_PATCHES}
     CONFIGS
     ${ARG_CONFIGS}
+    IMPORT_DEFINITIONS
+    ${ARG_IMPORT_DEFINITIONS}
+    IMPORT_EXCLUDE
+    ${ARG_IMPORT_EXCLUDE}
     ${_run_tests_flag}
     ${_force_flag}
     ${_shared_flag})
@@ -931,7 +950,7 @@ function(spm_fetch_source)
       )
     endif()
     _spm_log("Applying patch '${_patch}' to '${SPM_PKG_NAME}'")
-    execute_process(
+    _spm_execute_process(
       COMMAND ${GIT_EXECUTABLE} apply --whitespace=fix "${_patch}"
       WORKING_DIRECTORY "${${SPM_PKG_NAME}_SOURCE_DIR}"
       RESULT_VARIABLE _patch_result
