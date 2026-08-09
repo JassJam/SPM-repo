@@ -28,6 +28,14 @@ runs:
       shell: pwsh
       run: choco install pkgconfiglite -y
 
+    - name: Install Ninja
+      shell: pwsh
+      run: choco install ninja -y
+
+    - name: Set default CMake generator
+      shell: bash
+      run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+
     - name: Install LLVM/Clang
       if: contains(inputs.arch, 'clang')
       shell: pwsh
