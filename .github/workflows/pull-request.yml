@@ -144,7 +144,7 @@ jobs:
           arch: ${{ matrix.config.output }}
 
       - name: Setup ${{ matrix.config.name }}
-        uses: ./.github/actions/configure/macos
+        uses: ./.github/actions/configure/windows
         if: contains(matrix.config.os, 'windows')
         with:
           package: ${{ matrix.package }}
