@@ -124,6 +124,12 @@ jobs:
           New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
             -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 
+      - name: Exclude build dir from Defender
+        if: contains(matrix.config.os, 'windows')
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+
       - name: Configure git
         run: |
           git config --global core.longpaths true
@@ -167,6 +173,15 @@ jobs:
         with:
           cmake-version: "3.30.0"
 
+      - name: Check TEMP space and validity (1)
+        shell: pwsh
+        run: |
+          Write-Host "TEMP=$env:TEMP"
+          Write-Host "TMP=$env:TMP"
+          Get-PSDrive -PSProvider FileSystem
+          Test-Path $env:TEMP
+
+
       - name: Configure ${{ matrix.config.name }}
         shell: bash
         run: |
@@ -182,8 +197,18 @@ jobs:
             -DCMAKE_OBJECT_PATH_MAX=32000 \
             -DSPM_VERBOSE_OUTPUT="ON"
 
+      - name: Check TEMP space and validity (2)
+        shell: pwsh
+        run: |
+          Write-Host "TEMP=$env:TEMP"
+          Write-Host "TMP=$env:TMP"
+          Get-PSDrive -PSProvider FileSystem
+          Test-Path $env:TEMP
+
       - name: Build ${{ matrix.config.name }}
         shell: bash
+        env:
+          CL: /MP1
         run: cmake --build build --config Release
 
       - name: Upload logs on failure
