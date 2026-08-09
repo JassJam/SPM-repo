@@ -1,0 +1,50 @@
+inputs:
+  package:
+    required: true
+  arch:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Determine MSVC arch
+      id: msvc-arch
+      shell: bash
+      run: |
+        if [[ "${{ inputs.arch }}" == *x86* && "${{ inputs.arch }}" != *x64* ]]; then
+          echo "arch=x86" >> "$GITHUB_OUTPUT"
+        else
+          echo "arch=x64" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Setup MSVC environment
+      uses: TheMrMilchmann/setup-msvc-dev@v3
+      with:
+        arch: ${{ steps.msvc-arch.outputs.arch }}
+
+    - name: Install LLVM/Clang
+      if: contains(inputs.arch, 'clang')
+      shell: pwsh
+      run: choco install llvm -y
+
+    - name: Install recipe system dependencies
+      shell: bash
+      run: |
+        DEPS_FILE="${{ inputs.package }}/SystemDeps"
+        echo "Looking for deps file at: $DEPS_FILE"
+        ls -la "${{ inputs.package }}" || echo "package dir doesn't exist"
+        if [ ! -f "$DEPS_FILE" ]; then
+          echo "No system deps for ${{ inputs.package }}"
+          exit 0
+        fi
+        cat "$DEPS_FILE"
+
+        PKGS=$(grep -E '^choco:' "$DEPS_FILE" | sed 's/^choco://' || true)
+        echo "Resolved packages: $PKGS"
+        if [ -n "$(echo "$PKGS" | xargs)" ]; then
+          for pkg in $PKGS; do
+            choco install "$pkg" -y
+          done
+        fi

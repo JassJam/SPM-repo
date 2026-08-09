@@ -1,0 +1,39 @@
+inputs:
+  package:
+    required: true
+  arch:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        brew install ninja
+
+    - name: Install dependencies (gcc)
+      if: contains(inputs.arch, 'gcc')
+      shell: bash
+      run: |
+        brew install gcc@14
+
+    - name: Install recipe system dependencies
+      shell: bash
+      run: |
+        DEPS_FILE="${{ inputs.package }}/SystemDeps"
+        echo "Looking for deps file at: $DEPS_FILE"
+        ls -la "${{ inputs.package }}" || echo "package dir doesn't exist"
+        if [ ! -f "$DEPS_FILE" ]; then
+          echo "No system deps for ${{ inputs.package }}"
+          exit 0
+        fi
+        cat "$DEPS_FILE"
+
+        PKGS=$(grep -E '^brew:' "$DEPS_FILE" | sed 's/^brew://' || true)
+        echo "Resolved packages: $PKGS"
+        if [ -n "$(echo "$PKGS" | xargs)" ]; then
+          brew install $PKGS
+        fi

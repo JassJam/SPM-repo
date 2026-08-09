@@ -63,55 +63,55 @@ jobs:
             output: linux-x86-clang
             configure-file: linux
 
-          # # Linux / GCC
-          # - name: linux-x64-gcc
-          #   os: ubuntu-latest
-          #   preset: unixlike-x64-gcc-release
-          #   output: linux-x64-gcc
-          #   configure-file: linux
-          # - name: linux-x86-gcc
-          #   os: ubuntu-latest
-          #   preset: unixlike-x86-gcc-release
-          #   output: linux-x86-gcc
-          #   configure-file: linux
+          # Linux / GCC
+          - name: linux-x64-gcc
+            os: ubuntu-latest
+            preset: unixlike-x64-gcc-release
+            output: linux-x64-gcc
+            configure-file: linux
+          - name: linux-x86-gcc
+            os: ubuntu-latest
+            preset: unixlike-x86-gcc-release
+            output: linux-x86-gcc
+            configure-file: linux
 
-          # # macOS / Clang
-          # - name: macos-x64-clang
-          #   os: macos-latest
-          #   preset: unixlike-x64-clang-release
-          #   output: macos-x64-clang
-          #   configure-file: macos
-          # - name: macos-arm64-clang
-          #   os: macos-latest
-          #   preset: unixlike-x64-clang-release
-          #   output: macos-arm64-clang
-          #   configure-file: macos
+          # macOS / Clang
+          - name: macos-x64-clang
+            os: macos-latest
+            preset: unixlike-x64-clang-release
+            output: macos-x64-clang
+            configure-file: macos
+          - name: macos-arm64-clang
+            os: macos-latest
+            preset: unixlike-x64-clang-release
+            output: macos-arm64-clang
+            configure-file: macos
 
-          # # macOS / GCC
-          # - name: macos-x64-gcc
-          #   os: macos-latest
-          #   preset: unixlike-x64-gcc-release
-          #   output: macos-x64-gcc
-          #   configure-file: macos
+          # macOS / GCC
+          - name: macos-x64-gcc
+            os: macos-latest
+            preset: unixlike-x64-gcc-release
+            output: macos-x64-gcc
+            configure-file: macos
 
-          # # Windows / MSVC
-          # - name: windows-x64-msvc
-          #   os: windows-latest
-          #   preset: windows-x64-msvc-release
-          #   output: windows-x64-msvc
-          #   configure-file: windows
-          # - name: windows-x86-msvc
-          #   os: windows-latest
-          #   preset: windows-x86-msvc-release
-          #   output: windows-x86-msvc
-          #   configure-file: windows
+          # Windows / MSVC
+          - name: windows-x64-msvc
+            os: windows-latest
+            preset: windows-x64-msvc-release
+            output: windows-x64-msvc
+            configure-file: windows
+          - name: windows-x86-msvc
+            os: windows-latest
+            preset: windows-x86-msvc-release
+            output: windows-x86-msvc
+            configure-file: windows
 
-          # # Windows / Clang
-          # - name: windows-x64-clang
-          #   os: windows-latest
-          #   preset: windows-clang-release
-          #   output: windows-x64-clang
-          #   configure-file: windows
+          # Windows / Clang
+          - name: windows-x64-clang
+            os: windows-latest
+            preset: windows-clang-release
+            output: windows-x64-clang
+            configure-file: windows
         link: [static, shared]
         package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
         cxx: [23]
@@ -132,6 +132,20 @@ jobs:
       - name: Setup ${{ matrix.config.name }}
         uses: ./.github/actions/configure/unix
         if: contains(matrix.config.os, 'ubuntu')
+        with:
+          package: ${{ matrix.package }}
+          arch: ${{ matrix.config.output }}
+
+      - name: Setup ${{ matrix.config.name }}
+        uses: ./.github/actions/configure/macos
+        if: contains(matrix.config.os, 'macos')
+        with:
+          package: ${{ matrix.package }}
+          arch: ${{ matrix.config.output }}
+
+      - name: Setup ${{ matrix.config.name }}
+        uses: ./.github/actions/configure/macos
+        if: contains(matrix.config.os, 'windows')
         with:
           package: ${{ matrix.package }}
           arch: ${{ matrix.config.output }}
