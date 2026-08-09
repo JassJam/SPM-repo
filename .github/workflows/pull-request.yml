@@ -96,22 +96,16 @@ jobs:
 
           # Windows / MSVC
           - name: windows-x64-msvc
-            os: windows-latest
+            os: windows-2025-vs2026
             preset: windows-x64-msvc-release
             output: windows-x64-msvc
             configure-file: windows
           - name: windows-x86-msvc
-            os: windows-latest
+            os: windows-2025-vs2026
             preset: windows-x86-msvc-release
             output: windows-x86-msvc
             configure-file: windows
 
-          # Windows / Clang
-          - name: windows-x64-clang
-            os: windows-latest
-            preset: windows-clang-release
-            output: windows-x64-clang
-            configure-file: windows
         link: [static, shared]
         package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
         cxx: [23]
