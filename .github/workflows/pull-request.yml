@@ -201,8 +201,6 @@ jobs:
 
       - name: Build ${{ matrix.config.name }}
         shell: bash
-        env:
-          CL: /MP1
         run: cmake --build build --config Release
 
       - name: Upload logs on failure
