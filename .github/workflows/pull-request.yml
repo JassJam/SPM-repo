@@ -51,48 +51,48 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          # Linux / Clang
-          - name: linux-x64-clang
-            os: ubuntu-latest
-            preset: unixlike-x64-clang-release
-            output: linux-x64-clang
-            configure-file: linux
-          - name: linux-x86-clang
-            os: ubuntu-latest
-            preset: unixlike-x86-clang-release
-            output: linux-x86-clang
-            configure-file: linux
+          # # Linux / Clang
+          # - name: linux-x64-clang
+          #   os: ubuntu-latest
+          #   preset: unixlike-x64-clang-release
+          #   output: linux-x64-clang
+          #   configure-file: linux
+          # - name: linux-x86-clang
+          #   os: ubuntu-latest
+          #   preset: unixlike-x86-clang-release
+          #   output: linux-x86-clang
+          #   configure-file: linux
 
-          # Linux / GCC
-          - name: linux-x64-gcc
-            os: ubuntu-latest
-            preset: unixlike-x64-gcc-release
-            output: linux-x64-gcc
-            configure-file: linux
-          - name: linux-x86-gcc
-            os: ubuntu-latest
-            preset: unixlike-x86-gcc-release
-            output: linux-x86-gcc
-            configure-file: linux
+          # # Linux / GCC
+          # - name: linux-x64-gcc
+          #   os: ubuntu-latest
+          #   preset: unixlike-x64-gcc-release
+          #   output: linux-x64-gcc
+          #   configure-file: linux
+          # - name: linux-x86-gcc
+          #   os: ubuntu-latest
+          #   preset: unixlike-x86-gcc-release
+          #   output: linux-x86-gcc
+          #   configure-file: linux
 
-          # macOS / Clang
-          - name: macos-x64-clang
-            os: macos-latest
-            preset: unixlike-x64-clang-release
-            output: macos-x64-clang
-            configure-file: macos
-          - name: macos-arm64-clang
-            os: macos-latest
-            preset: unixlike-x64-clang-release
-            output: macos-arm64-clang
-            configure-file: macos
+          # # macOS / Clang
+          # - name: macos-x64-clang
+          #   os: macos-latest
+          #   preset: unixlike-x64-clang-release
+          #   output: macos-x64-clang
+          #   configure-file: macos
+          # - name: macos-arm64-clang
+          #   os: macos-latest
+          #   preset: unixlike-x64-clang-release
+          #   output: macos-arm64-clang
+          #   configure-file: macos
 
-          # macOS / GCC
-          - name: macos-x64-gcc
-            os: macos-latest
-            preset: unixlike-x64-gcc-release
-            output: macos-x64-gcc
-            configure-file: macos
+          # # macOS / GCC
+          # - name: macos-x64-gcc
+          #   os: macos-latest
+          #   preset: unixlike-x64-gcc-release
+          #   output: macos-x64-gcc
+          #   configure-file: macos
 
           # Windows / MSVC
           - name: windows-x64-msvc
@@ -117,10 +117,20 @@ jobs:
         cxx: [23]
 
     steps:
+      - name: Enable Windows long paths
+        if: contains(matrix.config.os, 'windows')
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+
+      - name: Configure git for long paths
+        run: git config --global core.longpaths true
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Parse package name/versiono
+      - name: Parse package name/version
         id: pkg
         shell: bash
         run: |

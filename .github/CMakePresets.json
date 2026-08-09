@@ -56,30 +56,29 @@
 
 		{
 			"name": "windows-x64-msvc-release",
-			"displayName": "Windows x64 MSVC Release",
-			"description": "Target Windows x64 with MSVC, release build type",
+			"generator": "Ninja Multi-Config",
 			"inherits": ["conf-windows-common", "conf-release-common"],
+			"architecture": {
+				"value": "x64",
+				"strategy": "external"
+			},
 			"cacheVariables": {
 				"CMAKE_C_COMPILER": "cl",
 				"CMAKE_CXX_COMPILER": "cl"
-			},
-			"architecture": {
-				"value": "x64",
-				"strategy": "set"
 			}
 		},
 		{
 			"name": "windows-x86-msvc-release",
-			"displayName": "Windows x86 MSVC Release",
-			"description": "Target Windows x86 with MSVC, release build type",
+			"generator": "Ninja Multi-Config",
 			"inherits": ["conf-windows-common", "conf-release-common"],
+			
 			"cacheVariables": {
 				"CMAKE_C_COMPILER": "cl",
 				"CMAKE_CXX_COMPILER": "cl"
 			},
 			"architecture": {
 				"value": "Win32",
-				"strategy": "set"
+				"strategy": "external"
 			}
 		},
 
