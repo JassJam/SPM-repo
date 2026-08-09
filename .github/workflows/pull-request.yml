@@ -48,6 +48,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       max-parallel: 4
+      fail-fast: false
       matrix:
         config:
           # Linux / Clang
@@ -119,7 +120,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Parse package name/version
+      - name: Parse package name/versiono
         id: pkg
         shell: bash
         run: |

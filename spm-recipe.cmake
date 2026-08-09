@@ -393,7 +393,8 @@ endfunction()
 #
 # spm_create_target(
 #   NAME <name>
-#   INSTALL_DIR <path>
+#   [INSTALL_DIR <path>]
+#   [OUT_TARGET_NAME <name>]
 #   [EXTRA_DIRS <source>[:<destination>] ...]
 # )
 function(spm_create_target)
@@ -439,7 +440,6 @@ function(spm_create_target)
     endif()
 
     if(IS_DIRECTORY "${B_INSTALL_DIR}/bin")
-        file(GLOB_RECURSE _bin_files "${B_INSTALL_DIR}/bin/*")
         install(
             DIRECTORY "${B_INSTALL_DIR}/bin/"
             DESTINATION "bin"
@@ -478,4 +478,93 @@ function(spm_create_target)
     endif()
 
     spm_log("Target '${B_NAME}' created from '${B_INSTALL_DIR}'")
+endfunction()
+
+# Creates a target from a package config
+#
+# spm_create_target_from_pkgconfig(
+#   NAME <name>
+#   MODULE <name>
+#   [INSTALL_DIR <path>]
+#   [PKGCONFIG_DIR <path>]
+#   [OUT_TARGET_NAME <name>]
+# )
+function(spm_create_target_from_pkgconfig)
+    set(oneValArgs NAME INSTALL_DIR MODULE PKGCONFIG_DIR OUT_TARGET_NAME)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_NAME)
+        spm_log_fatal("spm_create_target_from_pkgconfig requires a NAME")
+    endif()
+    if(NOT B_MODULE)
+        spm_log_fatal("spm_create_target_from_pkgconfig requires MODULE (the .pc file's module name)")
+    endif()
+    if(NOT SPM_IMPORT_NAME)
+        spm_log_fatal("SPM_IMPORT_NAME is not set (must run inside an SPM recipe build)")
+    endif()
+    if(NOT B_INSTALL_DIR)
+        set(B_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/install")
+    endif()
+
+    find_package(PkgConfig REQUIRED)
+
+    if(B_PKGCONFIG_DIR)
+        set(_pc_dirs "${B_PKGCONFIG_DIR}")
+    else()
+        set(_pc_dirs
+            "${B_INSTALL_DIR}/lib/pkgconfig"
+            "${B_INSTALL_DIR}/lib64/pkgconfig"
+            "${B_INSTALL_DIR}/share/pkgconfig")
+    endif()
+
+    set(_found_pc_dir "")
+    foreach(_dir ${_pc_dirs})
+        if(EXISTS "${_dir}/${B_MODULE}.pc")
+            set(_found_pc_dir "${_dir}")
+            break()
+        endif()
+    endforeach()
+    if(NOT _found_pc_dir)
+        spm_log_fatal("No '${B_MODULE}.pc' found under any of: ${_pc_dirs}")
+    endif()
+
+    set(_target_name "_spm_${SPM_IMPORT_NAME}_${B_NAME}")
+    if(TARGET ${_target_name})
+        spm_log_fatal("Target '${_target_name}' already exists")
+    endif()
+
+    string(MAKE_C_IDENTIFIER "_spmpc_${SPM_IMPORT_NAME}_${B_NAME}" _pc_prefix)
+    if(TARGET PkgConfig::${_pc_prefix})
+        spm_log_fatal("pkg-config target 'PkgConfig::${_pc_prefix}' already exists")
+    endif()
+
+    set(_saved_pkg_config_path "$ENV{PKG_CONFIG_PATH}")
+    set(ENV{PKG_CONFIG_PATH} "${_found_pc_dir}")
+
+    pkg_check_modules(${_pc_prefix} REQUIRED IMPORTED_TARGET GLOBAL "${B_MODULE}")
+
+    set(ENV{PKG_CONFIG_PATH} "${_saved_pkg_config_path}")
+
+    add_library(${_target_name} INTERFACE IMPORTED GLOBAL)
+    target_link_libraries(${_target_name} INTERFACE PkgConfig::${_pc_prefix})
+    add_library(${SPM_IMPORT_NAME}::${B_NAME} ALIAS ${_target_name})
+
+    if(B_OUT_TARGET_NAME)
+        set(${B_OUT_TARGET_NAME} ${_target_name} PARENT_SCOPE)
+    endif()
+
+    spm_log("Registered target '${SPM_IMPORT_NAME}::${B_NAME}' from pkg-config module '${B_MODULE}' (${_found_pc_dir}, prefix ${_pc_prefix})")
+
+    if(IS_DIRECTORY "${B_INSTALL_DIR}/include")
+        install(DIRECTORY "${B_INSTALL_DIR}/include/" DESTINATION "include")
+    endif()
+    if(IS_DIRECTORY "${B_INSTALL_DIR}/lib")
+        install(DIRECTORY "${B_INSTALL_DIR}/lib/" DESTINATION "lib")
+    endif()
+    if(IS_DIRECTORY "${B_INSTALL_DIR}/bin")
+        install(
+            DIRECTORY "${B_INSTALL_DIR}/bin/"
+            DESTINATION "bin"
+            FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+    endif()
 endfunction()
