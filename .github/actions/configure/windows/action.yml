@@ -23,6 +23,14 @@ runs:
       uses: TheMrMilchmann/setup-msvc-dev@v3
       with:
         arch: ${{ steps.msvc-arch.outputs.arch }}
+        toolset: 14.44
+
+    - name: Install ATL component
+      shell: pwsh
+      run: |
+        $vsInstaller = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+        & $vsInstaller modify --installPath "C:\Program Files\Microsoft Visual Studio\18\Enterprise" `
+          --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart --wait
 
     - name: Install pkg-config
       shell: pwsh
