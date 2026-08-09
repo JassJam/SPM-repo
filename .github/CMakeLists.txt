@@ -21,7 +21,8 @@ spm_require_package(
 	NAME      "${SPM_TEST_PACKAGE_NAME}"
 	VERSION   "${SPM_TEST_PACKAGE_VERSION}"
 	DIRECTORY "${_recipe_dir}"
-	RUN_TESTS
 	FORCE
 	${_shared_flag}
 )
+
+add_subdirectory("${_recipe_dir}/test" build)

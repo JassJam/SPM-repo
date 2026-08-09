@@ -1,0 +1,481 @@
+include_guard(GLOBAL)
+
+set(SPM_PARALLEL_JOBS
+    "4"
+    CACHE STRING "Parallel build jobs used when building a recipe")
+
+set(SPM_VERBOSE_OUTPUT
+    ON
+    CACHE BOOL "Verbose SPM logging")
+
+set(SPM_IMPORT_NAME
+    ""
+    CACHE STRING "namespace of the target to be installed")
+
+set(SPM_SKIP_TESTS
+    OFF
+    CACHE BOOL "Skip recipe test phase even if RUN_TESTS was requested (warn instead of fail)")
+
+set(SPM_FORCE_REBUILD
+    OFF
+    CACHE BOOL "Ignore all cache hits and rebuild every requested package from scratch")
+
+#
+
+find_program(GIT_EXECUTABLE NAMES git)
+
+macro(_spm_requires_git)
+    if(NOT GIT_EXECUTABLE)
+        spm_log_fatal("no git executable was found")
+    endif()
+endmacro()
+
+macro(spm_log)
+    if(SPM_VERBOSE_OUTPUT)
+        message(STATUS "[SPM]: ${ARGV}.")
+    endif()
+endmacro()
+
+macro(spm_log_fatal)
+    message(FATAL_ERROR "[SPM]: ${ARGV}.")
+endmacro()
+
+macro(spm_execute_process)
+    spm_log("Executing ${ARGV}")
+    execute_process(${ARGV})
+endmacro()
+
+#
+
+# Checks/writes a stamp file, used to not repatch/do expensive operations
+#
+# spm_stamp_file(
+#   [FILE .spm-stamped]
+#   OUT_VAR <var> # sets tp true if the stamp already exists
+# )
+function(spm_stamp_file)
+    set(oneValArgs FILE OUT_VAR)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_FILE)
+        set(B_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.spm-stamped")
+    endif()
+
+    if(B_OUT_VAR)
+        if(EXISTS "${B_FILE}")
+            set(${B_OUT_VAR}
+                TRUE
+                PARENT_SCOPE)
+            spm_log("Stamp file ${B_FILE} exists, ignoring")
+        else()
+            set(${B_OUT_VAR}
+                FALSE
+                PARENT_SCOPE)
+            get_filename_component(_stamp_dir "${B_FILE}" DIRECTORY)
+            if(_stamp_dir AND NOT EXISTS "${_stamp_dir}")
+                file(MAKE_DIRECTORY "${_stamp_dir}")
+            endif()
+            file(WRITE "${B_FILE}" "ok")
+            spm_log("Stamped '${B_FILE}'")
+        endif()
+    endif()
+endfunction()
+
+# Fetches from a git source
+# spm_git_clone(
+#   URL <url>
+#   TAG <tag>
+#   [DESTINATION source]
+# )
+function(spm_git_clone)
+    _spm_requires_git()
+
+    set(oneValArgs URL TAG DESTINATION)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_DESTINATION)
+        set(B_DESTINATION source)
+    endif()
+
+    spm_stamp_file(FILE "${CMAKE_CURRENT_SOURCE_DIR}/.spm-gitclone-${B_DESTINATION}" OUT_VAR exists)
+    if(exists)
+        return()
+    endif()
+
+    set(_dest_file "${CMAKE_CURRENT_SOURCE_DIR}/${B_DESTINATION}")
+    if(EXISTS "${_dest_file}")
+        file(REMOVE_RECURSE "${_dest_file}")
+    endif()
+    file(MAKE_DIRECTORY "${_dest_file}")
+
+    set(_clone_args "")
+    if(NOT B_TAG)
+        list(APPEND _clone_args --depth 1)
+    endif()
+
+    spm_log("Cloning ${B_URL}")
+    spm_execute_process(
+        COMMAND
+        ${GIT_EXECUTABLE}
+        clone
+        ${_clone_args}
+        "${B_URL}"
+        "${_dest_file}"
+        RESULT_VARIABLE
+        _git_result
+        OUTPUT_VARIABLE
+        _git_output
+        ERROR_VARIABLE
+        _git_output)
+    if(NOT _git_result EQUAL 0)
+        file(REMOVE_RECURSE "${_dest_file}")
+        spm_log_fatal("git clone failed for (${_URL}):\n${_git_output}")
+    endif()
+
+    if(B_TAG)
+        spm_log("Checking out '${B_TAG}'")
+        spm_execute_process(
+            COMMAND
+            ${GIT_EXECUTABLE}
+            checkout
+            "${B_TAG}"
+            WORKING_DIRECTORY
+            "${_dest_file}"
+            RESULT_VARIABLE
+            _checkout_result
+            OUTPUT_VARIABLE
+            _checkout_output
+            ERROR_VARIABLE
+            _checkout_output)
+
+        if(NOT _checkout_result EQUAL 0)
+            spm_execute_process(
+                COMMAND
+                ${GIT_EXECUTABLE}
+                fetch
+                --depth
+                1
+                origin
+                "${B_TAG}"
+                WORKING_DIRECTORY
+                "${_dest_file}"
+                RESULT_VARIABLE
+                _fetch_result
+                OUTPUT_VARIABLE
+                _fetch_output
+                ERROR_VARIABLE
+                _fetch_output)
+
+            if(_fetch_result EQUAL 0)
+                spm_execute_process(
+                    COMMAND
+                    ${GIT_EXECUTABLE}
+                    checkout
+                    FETCH_HEAD
+                    WORKING_DIRECTORY
+                    "${_dest_file}"
+                    RESULT_VARIABLE
+                    _checkout_result
+                    OUTPUT_VARIABLE
+                    _checkout_output
+                    ERROR_VARIABLE
+                    _checkout_output)
+            endif()
+
+            if(NOT _checkout_result EQUAL 0)
+                file(REMOVE_RECURSE "${_dest_file}")
+                spm_log_fatal("Failed to check out '${B_TAG}':\n${_checkout_output}")
+            endif()
+        endif()
+
+        spm_execute_process(
+            COMMAND
+            ${GIT_EXECUTABLE}
+            submodule
+            update
+            --init
+            --recursive
+            --depth
+            1
+            WORKING_DIRECTORY
+            "${_dest_file}"
+            RESULT_VARIABLE
+            _submod_result
+            OUTPUT_VARIABLE
+            _submod_output
+            ERROR_VARIABLE
+            _submod_output)
+        if(NOT _submod_result EQUAL 0)
+            spm_log_fatal("git submodule update failed:\n${_submod_output}")
+        endif()
+    endif()
+endfunction()
+
+# Patches source
+# spm_apply_patch(
+#   PATCHES ...
+#   [SOURCE_DIR source]
+# )
+function(spm_apply_patch)
+    _spm_requires_git()
+
+    set(oneValArgs SOURCE_DIR)
+    set(multiValArgs PATCHES)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(NOT B_SOURCE_DIR)
+        set(B_SOURCE_DIR source)
+    endif()
+
+    set(_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/${B_SOURCE_DIR}")
+    foreach(_patch ${B_PATCHES})
+        if(IS_ABSOLUTE "${_patch}")
+            set(_patch_file "${_patch}")
+        else()
+            set(_patch_file "${CMAKE_CURRENT_SOURCE_DIR}/${_patch}")
+        endif()
+
+        string(SHA256 _hash "${_patch_file}")
+        spm_stamp_file(FILE "${CMAKE_CURRENT_SOURCE_DIR}/.spm-patch-${_hash}" OUT_VAR exists)
+        if(exists)
+            return()
+        endif()
+
+        spm_log("Applying patch '${_patch}'")
+        spm_execute_process(
+            COMMAND
+            ${GIT_EXECUTABLE}
+            apply
+            --whitespace=fix
+            "${_patch_file}"
+            WORKING_DIRECTORY
+            "${_source_dir}"
+            RESULT_VARIABLE
+            _patch_result
+            OUTPUT_VARIABLE
+            _patch_output
+            ERROR_VARIABLE
+            _patch_output)
+        if(NOT _patch_result EQUAL 0)
+            spm_log_fatal("Failed to apply patch '${patch}':\n${_patch_output}")
+        endif()
+    endforeach()
+endfunction()
+
+# Configure a cmake target
+# spm_cmake_configure(
+#   [SOURCE_DIR source]
+#   [BUILD_DIR build]
+#   [INSTALL_DIR install]
+#   [OPTIONS ...]
+# )
+function(spm_cmake_configure)
+    _spm_requires_git()
+
+    set(oneValArgs SOURCE_DIR BUILD_DIR INSTALL_DIR)
+    set(multiValArgs OPTIONS)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(NOT B_SOURCE_DIR)
+        set(B_SOURCE_DIR source)
+    endif()
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    if(NOT B_INSTALL_DIR)
+        set(B_INSTALL_DIR install)
+    endif()
+
+    if(CMAKE_BUILD_TYPE)
+        set(_pkg_build_type "${CMAKE_BUILD_TYPE}")
+    else()
+        set(_pkg_build_type "Release")
+    endif()
+
+    if(BUILD_SHARED_LIBS)
+        set(_pkg_build_shared "ON")
+    else()
+        set(_pkg_build_shared "OFF")
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${CMAKE_COMMAND}
+        -S
+        ${B_SOURCE_DIR}
+        -B
+        ${B_BUILD_DIR}
+        -G
+        "${CMAKE_GENERATOR}"
+        -C
+        "spm-input.cmake"
+        ${B_OPTIONS}
+        -DCMAKE_INSTALL_PREFIX=${B_INSTALL_DIR}
+        -DCMAKE_BUILD_TYPE=${_pkg_build_type}
+        ${_toolchain_args}
+        -DBUILD_SHARED_LIBS=${_pkg_build_shared}
+        -DBUILD_TESTING=OFF
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _cfg_result
+        OUTPUT_VARIABLE
+        _cfg_output
+        ERROR_VARIABLE
+        _cfg_output)
+
+    if(NOT _cfg_result EQUAL 0)
+        spm_log_fatal("Configure failed:\n${_cfg_output}")
+    else()
+        spm_log("Configure succeeded:\n${_cfg_output}")
+    endif()
+
+endfunction()
+
+# Build a configured cmake target
+# spm_cmake_build(
+#   [BUILD_DIR build]
+# )
+function(spm_cmake_build)
+    _spm_requires_git()
+
+    if(CMAKE_BUILD_TYPE)
+        set(_pkg_build_type "${CMAKE_BUILD_TYPE}")
+    else()
+        set(_pkg_build_type "Release")
+    endif()
+
+    set(oneValArgs BUILD_DIR)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    set(_build_target_args)
+
+    spm_execute_process(
+        COMMAND
+        ${CMAKE_COMMAND}
+        --build
+        ${B_BUILD_DIR}
+        --config
+        ${_pkg_build_type}
+        --parallel
+        ${SPM_PARALLEL_JOBS}
+        --target
+        install
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _build_result
+        OUTPUT_VARIABLE
+        _build_output
+        ERROR_VARIABLE
+        _build_output)
+    if(NOT _build_result EQUAL 0)
+        spm_log_fatal("Build failed target")
+    endif()
+endfunction()
+
+#
+#
+
+# Creates a target from a package install directory laid out as:
+#   .
+#   |_ include/
+#   |_ bin/
+#   |_ lib/
+#   |_ extra/
+#
+# spm_create_target(
+#   NAME <name>
+#   INSTALL_DIR <path>
+#   [EXTRA_DIRS <source>[:<destination>] ...]
+# )
+function(spm_create_target)
+    set(oneValArgs NAME INSTALL_DIR OUT_TARGET_NAME)
+    set(multiValArgs EXTRA_DIRS)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(NOT B_INSTALL_DIR)
+        set(B_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/install")
+    endif()
+
+    if(NOT B_NAME)
+        spm_log_fatal("spm_create_target requires a name")
+    endif()
+
+    if(NOT SPM_IMPORT_NAME)
+        spm_log_fatal("SPM_IMPORT_NAME is not set (spm_create_target must run inside an SPM recipe build)")
+    endif()
+
+    set(_target_name "_spm_${SPM_IMPORT_NAME}_${B_NAME}")
+    if(TARGET ${_target_name})
+        spm_log_fatal("Target '${_target_name}' already exists")
+    endif()
+    if(B_OUT_TARGET_NAME)
+        set(${B_OUT_TARGET_NAME} ${_target_name} PARENT_SCOPE)
+    endif()
+
+    add_library(${_target_name} INTERFACE IMPORTED GLOBAL)
+    add_library(${SPM_IMPORT_NAME}::${B_NAME} ALIAS ${_target_name})
+    spm_log("Registered target '${SPM_IMPORT_NAME}::${B_NAME}'")
+
+    set(_link_libs "")
+
+    if(IS_DIRECTORY "${B_INSTALL_DIR}/include")
+        set_target_properties(${_target_name} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${B_INSTALL_DIR}/include")
+        install(DIRECTORY "${B_INSTALL_DIR}/include/" DESTINATION "include")
+    endif()
+
+    if(IS_DIRECTORY "${B_INSTALL_DIR}/lib")
+        file(GLOB_RECURSE _static_libs "${B_INSTALL_DIR}/lib/*")
+        list(APPEND _link_libs ${_static_libs})
+        install(DIRECTORY "${B_INSTALL_DIR}/lib/" DESTINATION "lib")
+    endif()
+
+    if(IS_DIRECTORY "${B_INSTALL_DIR}/bin")
+        file(GLOB_RECURSE _bin_files "${B_INSTALL_DIR}/bin/*")
+        install(
+            DIRECTORY "${B_INSTALL_DIR}/bin/"
+            DESTINATION "bin"
+            FILE_PERMISSIONS
+                OWNER_READ
+                OWNER_WRITE
+                OWNER_EXECUTE
+                GROUP_READ
+                GROUP_EXECUTE
+                WORLD_READ
+                WORLD_EXECUTE)
+    endif()
+
+    if(_link_libs)
+        set_target_properties(${_target_name} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_libs}")
+    endif()
+
+    if(B_EXTRA_DIRS)
+        foreach(_pair ${B_EXTRA_DIRS})
+            string(FIND "${_pair}" ":" _sep)
+            if(_sep EQUAL -1)
+                set(_src "${_pair}")
+                set(_dest "${_pair}")
+            else()
+                string(SUBSTRING "${_pair}" 0 ${_sep} _src)
+                math(EXPR _dest_start "${_sep} + 1")
+                string(SUBSTRING "${_pair}" ${_dest_start} -1 _dest)
+            endif()
+            if(NOT IS_DIRECTORY "${_src}")
+                spm_log_fatal("EXTRA_DIRS source '${_src}' is not a directory")
+            endif()
+            install(DIRECTORY "${_src}/" DESTINATION "${_dest}")
+        endforeach()
+    elseif(IS_DIRECTORY "${B_INSTALL_DIR}/extra")
+        install(DIRECTORY "${B_INSTALL_DIR}/extra/" DESTINATION "share/${B_NAME}")
+    endif()
+
+    spm_log("Target '${B_NAME}' created from '${B_INSTALL_DIR}'")
+endfunction()
