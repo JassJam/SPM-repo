@@ -174,17 +174,12 @@ jobs:
           if [ "${{ matrix.link }}" = "shared" ]; then
             SHARED_FLAG=ON
           fi
-          BUILD_DIR=build
-          if [[ "${{ matrix.config.os }}" == windows-* ]]; then
-            BUILD_DIR=/d/b
-          fi
-          cmake -S .github -B "$BUILD_DIR" --preset ${{ matrix.config.preset }} \
-            -DCMAKE_CXX_STANDARD=${{ matrix.cxx }} \
+          cmake -S .github -B build --preset ${{ matrix.config.preset }} \
+          	-DCMAKE_CXX_STANDARD=${{ matrix.cxx }} \
             -DSPM_TEST_PACKAGE_NAME="${{ steps.pkg.outputs.name }}" \
             -DSPM_TEST_PACKAGE_VERSION="${{ steps.pkg.outputs.version }}" \
             -DSPM_TEST_SHARED="$SHARED_FLAG" \
             -DSPM_VERBOSE_OUTPUT="ON"
-          echo "BUILD_DIR=$BUILD_DIR" >> "$GITHUB_ENV"
 
       - name: Build ${{ matrix.config.name }}
         shell: bash
