@@ -24,6 +24,10 @@ runs:
       with:
         arch: ${{ steps.msvc-arch.outputs.arch }}
 
+    - name: Install pkg-config
+      shell: pwsh
+      run: choco install pkgconfiglite -y
+
     - name: Install LLVM/Clang
       if: contains(inputs.arch, 'clang')
       shell: pwsh

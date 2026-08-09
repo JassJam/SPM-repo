@@ -124,8 +124,10 @@ jobs:
           New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
             -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 
-      - name: Configure git for long paths
-        run: git config --global core.longpaths true
+      - name: Configure git
+        run: |
+          git config --global core.longpaths true
+          git config --global core.autocrlf input
 
       - name: Checkout
         uses: actions/checkout@v4
