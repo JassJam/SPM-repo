@@ -10,7 +10,6 @@ spm_apply_patch(
 	patches/glslang-cstdint.patch
 	patches/no-clang-format.patch
 	patches/export-defines.patch
-	patches/spirv-tools-opt-disable-gl-fold-pass.patch
 )
 
 spm_cmake_configure()
