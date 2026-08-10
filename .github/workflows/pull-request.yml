@@ -3,10 +3,6 @@ name: Test packages
 on:
   pull_request:
 
-concurrency:
-  group: test-packages-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
@@ -22,7 +18,6 @@ jobs:
         id: changes
         shell: bash
         run: |
-          set -euo pipefail
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || true)
@@ -46,24 +41,97 @@ jobs:
           printf '%s' "$EXISTING"
 
   test-package:
+    name: ${{ matrix.config.name }} / ${{ matrix.link }} / ${{ matrix.package }}
+    runs-on: ${{ matrix.config.os }}
     needs: detect-changes
     if: needs.detect-changes.outputs.has_packages == 'true'
+    timeout-minutes: 60
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest # linux x86_64
-          - ubuntu-24.04-arm # linux arm64
-          - windows-latest # windows x86_64
-          - macos-latest # macos arm64 (Apple Silicon)
+        config:
+          # Linux / Clang
+          - name: linux-x64-clang
+            os: ubuntu-latest
+            preset: unixlike-x64-clang-release
+            output: linux-x64-clang
+            configure-file: linux
+          - name: linux-x86-clang
+            os: ubuntu-latest
+            preset: unixlike-x86-clang-release
+            output: linux-x86-clang
+            configure-file: linux
+
+          # Linux / GCC
+          - name: linux-x64-gcc
+            os: ubuntu-latest
+            preset: unixlike-x64-gcc-release
+            output: linux-x64-gcc
+            configure-file: linux
+          - name: linux-x86-gcc
+            os: ubuntu-latest
+            preset: unixlike-x86-gcc-release
+            output: linux-x86-gcc
+            configure-file: linux
+
+          # macOS / Clang
+          - name: macos-x64-clang
+            os: macos-latest
+            preset: unixlike-x64-clang-release
+            output: macos-x64-clang
+            configure-file: macos
+          - name: macos-arm64-clang
+            os: macos-latest
+            preset: unixlike-x64-clang-release
+            output: macos-arm64-clang
+            configure-file: macos
+
+          # macOS / GCC
+          - name: macos-x64-gcc
+            os: macos-latest
+            preset: unixlike-x64-gcc-release
+            output: macos-x64-gcc
+            configure-file: macos
+
+          # Windows / MSVC
+          - name: windows-x64-msvc
+            os: windows-2025-vs2026
+            preset: windows-x64-msvc-release
+            output: windows-x64-msvc
+            configure-file: windows
+          - name: windows-x86-msvc
+            os: windows-2025-vs2026
+            preset: windows-x86-msvc-release
+            output: windows-x86-msvc
+            configure-file: windows
+
         link: [static, shared]
         package: ${{ fromJson(needs.detect-changes.outputs.packages) }}
-    runs-on: ${{ matrix.os }}
-    name: ${{ matrix.os }} / ${{ matrix.link }} / ${{ matrix.package }}
-    timeout-minutes: 30
+        cxx: [23]
+
     steps:
+      - name: Enable Windows long paths
+        if: contains(matrix.config.os, 'windows')
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+
+      - name: Exclude build dir from Defender
+        if: contains(matrix.config.os, 'windows')
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+
+      - name: Configure git
+        run: |
+          git config --global core.longpaths true
+          git config --global core.autocrlf input
+
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Parse package name/version
         id: pkg
         shell: bash
@@ -73,44 +141,47 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Check platform support
-        id: platform_check
-        shell: bash
-        run: |
-          OUTPUT=$(cmake -DRECIPE_DIR="${{ matrix.package }}" -P ci/test-harness/unsupported.cmake)
-          SKIP=false
-          if echo "$OUTPUT" | grep -q '^SPM_UNSUPPORTED:'; then
-            SKIP=true
-            REASON=$(echo "$OUTPUT" | sed -n 's/^SPM_UNSUPPORTED://p')
-            echo "::notice::Skipping ${{ matrix.package }} on ${{ matrix.os }} — $REASON"
-          fi
-          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+      - name: Setup ${{ matrix.config.name }}
+        uses: ./.github/actions/configure/unix
+        if: contains(matrix.config.os, 'ubuntu')
+        with:
+          package: ${{ matrix.package }}
+          arch: ${{ matrix.config.output }}
 
-      - name: Configure (fetch + build + test the recipe)
-        if: steps.platform_check.outputs.skip != 'true'
+      - name: Setup ${{ matrix.config.name }}
+        uses: ./.github/actions/configure/macos
+        if: contains(matrix.config.os, 'macos')
+        with:
+          package: ${{ matrix.package }}
+          arch: ${{ matrix.config.output }}
+
+      - name: Setup ${{ matrix.config.name }}
+        uses: ./.github/actions/configure/windows
+        if: contains(matrix.config.os, 'windows')
+        with:
+          package: ${{ matrix.package }}
+          arch: ${{ matrix.config.output }}
+
+      - name: Install CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: "3.30.0"
+
+      - name: Configure ${{ matrix.config.name }}
         shell: bash
         run: |
           SHARED_FLAG=OFF
           if [ "${{ matrix.link }}" = "shared" ]; then
             SHARED_FLAG=ON
           fi
-          cmake -S ci/test-harness -B build \
-          	-DCMAKE_CXX_STANDARD=23 \
+          cmake -S .github -B build --preset ${{ matrix.config.preset }} \
+          	-DCMAKE_CXX_STANDARD=${{ matrix.cxx }} \
             -DSPM_TEST_PACKAGE_NAME="${{ steps.pkg.outputs.name }}" \
             -DSPM_TEST_PACKAGE_VERSION="${{ steps.pkg.outputs.version }}" \
-            -DSPM_TEST_SHARED="$SHARED_FLAG"
+            -DSPM_TEST_SHARED="$SHARED_FLAG" \
+            -DCMAKE_OBJECT_PATH_MAX=32000 \
+            -DSPM_VERBOSE_OUTPUT="ON"
 
-      - name: Build (drives the recipe's isolated build)
-        if: steps.platform_check.outputs.skip != 'true'
+      - name: Build ${{ matrix.config.name }}
         shell: bash
         run: cmake --build build --config Release
-
-      - name: Upload logs on failure
-        if: failure() && steps.platform_check.outputs.skip != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: spm-logs-${{ matrix.os }}-${{ matrix.link }}-${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}
-          path: |
-            build/_spm/**/CMakeFiles/CMakeError.log
-            build/_spm/**/CMakeFiles/CMakeOutput.log
-          if-no-files-found: ignore
