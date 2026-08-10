@@ -1,10 +1,14 @@
-cmake_minimum_required(VERSION 3.21)
-project(flecs_pkg)
-include(${SPM_ROOT}/spm.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
-spm_fetch_source(GIT_URL https://github.com/SanderMertens/flecs.git GIT_TAG v4.1.6)
+spm_git_clone(
+	URL https://github.com/SanderMertens/flecs.git
+	TAG v4.1.6
+)
 
-set(FLECS_STATIC NOT ${BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
-set(FLECS_SHARED ${BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
+spm_cmake_configure()
+spm_cmake_build()
 
-add_subdirectory(${SPM_PKG_SOURCE_DIR} src)
+spm_create_target(
+    NAME flecs
+    MODULE flecs
+)

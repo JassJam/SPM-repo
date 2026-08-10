@@ -436,7 +436,13 @@ function(spm_create_target)
     endif()
 
     if(IS_DIRECTORY "${B_INSTALL_DIR}/lib")
-        file(GLOB_RECURSE _static_libs "${B_INSTALL_DIR}/lib/*")
+        file(GLOB_RECURSE _static_libs
+            "${B_INSTALL_DIR}/lib/*.a"
+            "${B_INSTALL_DIR}/lib/*.so"
+            "${B_INSTALL_DIR}/lib/*.so.*"
+            "${B_INSTALL_DIR}/lib/*.dylib"
+            "${B_INSTALL_DIR}/lib/*.lib"
+            "${B_INSTALL_DIR}/lib/*.dll")
         list(APPEND _link_libs ${_static_libs})
         install(DIRECTORY "${B_INSTALL_DIR}/lib/" DESTINATION "lib")
     endif()
