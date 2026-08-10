@@ -167,15 +167,6 @@ jobs:
         with:
           cmake-version: "3.30.0"
 
-      - name: Check TEMP space and validity (1)
-        shell: pwsh
-        run: |
-          Write-Host "TEMP=$env:TEMP"
-          Write-Host "TMP=$env:TMP"
-          Get-PSDrive -PSProvider FileSystem
-          Test-Path $env:TEMP
-
-
       - name: Configure ${{ matrix.config.name }}
         shell: bash
         run: |
@@ -191,23 +182,6 @@ jobs:
             -DCMAKE_OBJECT_PATH_MAX=32000 \
             -DSPM_VERBOSE_OUTPUT="ON"
 
-      - name: Check TEMP space and validity (2)
-        shell: pwsh
-        run: |
-          Write-Host "TEMP=$env:TEMP"
-          Write-Host "TMP=$env:TMP"
-          Get-PSDrive -PSProvider FileSystem
-          Test-Path $env:TEMP
-
       - name: Build ${{ matrix.config.name }}
         shell: bash
         run: cmake --build build --config Release
-
-      - name: Upload logs on failure
-        uses: actions/upload-artifact@v4
-        with:
-          name: spm-logs-${{ matrix.os }}-${{ matrix.link }}-${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}
-          path: |
-            ${{ env.BUILD_DIR }}/_spm/**/CMakeFiles/CMakeError.log
-            ${{ env.BUILD_DIR }}/_spm/**/CMakeFiles/CMakeOutput.log
-          if-no-files-found: ignore
