@@ -21,6 +21,3 @@ spm_create_target_from_pkgconfig(
     NAME fmt
     MODULE fmt
 )
-
-if(MSVC)
-    target_lin

@@ -10,10 +10,16 @@ spm_apply_patch(
 	patches/mimalloc-multiconfig-obj.patch
 )
 
+set(_win32_arg "")
+if(WIN32)
+	list(APPEND _win32_arg "-A Win32")
+endif()
+
 spm_cmake_configure(
 	OPTIONS
 	"-DMI_BUILD_TESTS=OFF"
 	"-DMI_INSTALL_TOPLEVEL=ON"
+	${_win32_arg}
 )
 spm_cmake_build()
 
