@@ -1,0 +1,25 @@
+diff --git a/DiligentCore/CMakeLists.txt b/DiligentCore/CMakeLists.txt
+index fc3c5d809..be11ce0d4 100644
+--- a/DiligentCore/CMakeLists.txt
++++ b/DiligentCore/CMakeLists.txt
+@@ -633,3 +633,20 @@ endif(DILIGENT_INSTALL_CORE)
+ 
+ # Create a custom target to run source code formatting validation command
+ add_format_validation_target(DiligentCore "${CMAKE_CURRENT_SOURCE_DIR}" DiligentCore/BuildTools)
++
++get_cmake_property(vars VARIABLES)
++list(SORT vars)
++set(TARGET_VARS
++    PLATFORM_ANDROID PLATFORM_EMSCRIPTEN PLATFORM_IOS PLATFORM_LINUX PLATFORM_MACOS PLATFORM_TVOS PLATFORM_UNIVERSAL_WINDOWS PLATFORM_WIN32
++    ARCHIVER_SUPPORTED D3D11_SUPPORTED D3D12_SUPPORTED GLES_SUPPORTED GL_SUPPORTED METAL_SUPPORTED VULKAN_SUPPORTED WEBGPU_SUPPORTED
++)
++file(WRITE "${CMAKE_BINARY_DIR}/defines.txt" "")
++foreach(var IN LISTS vars)
++    if(var IN_LIST TARGET_VARS)
++        set(value "0")
++        if(${${var}})
++            set(value "1")
++        endif()
++        file(APPEND "${CMAKE_BINARY_DIR}/defines.txt" "${var}=${value}\n")
++    endif()
++endforeach()

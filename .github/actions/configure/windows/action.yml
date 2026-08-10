@@ -1,0 +1,72 @@
+inputs:
+  package:
+    required: true
+  arch:
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Determine MSVC arch
+      id: msvc-arch
+      shell: bash
+      run: |
+        if [[ "${{ inputs.arch }}" == *x86* && "${{ inputs.arch }}" != *x64* ]]; then
+          echo "arch=x86" >> "$GITHUB_OUTPUT"
+        else
+          echo "arch=x64" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Setup MSVC environment
+      uses: TheMrMilchmann/setup-msvc-dev@v3
+      with:
+        arch: ${{ steps.msvc-arch.outputs.arch }}
+
+    - name: Install ATL component
+      if: contains(matrix.config.os, 'windows')
+      shell: pwsh
+      run: |
+        $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+        & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "$vsPath" `
+          --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart --wait
+
+    - name: Install pkg-config
+      shell: pwsh
+      run: choco install pkgconfiglite -y
+
+    - name: Install Ninja
+      shell: pwsh
+      run: choco install ninja -y
+
+    - name: Set default CMake generator
+      shell: bash
+      run: echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+
+    - name: Install LLVM/Clang
+      if: contains(inputs.arch, 'clang')
+      shell: pwsh
+      run: |
+        choco install llvm -y
+        echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Install recipe system dependencies
+      shell: bash
+      run: |
+        DEPS_FILE="${{ inputs.package }}/SystemDeps"
+        echo "Looking for deps file at: $DEPS_FILE"
+        ls -la "${{ inputs.package }}" || echo "package dir doesn't exist"
+        if [ ! -f "$DEPS_FILE" ]; then
+          echo "No system deps for ${{ inputs.package }}"
+          exit 0
+        fi
+        cat "$DEPS_FILE"
+
+        PKGS=$(grep -E '^choco:' "$DEPS_FILE" | sed 's/^choco://' || true)
+        echo "Resolved packages: $PKGS"
+        if [ -n "$(echo "$PKGS" | xargs)" ]; then
+          for pkg in $PKGS; do
+            choco install "$pkg" -y
+          done
+        fi
