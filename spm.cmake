@@ -146,7 +146,12 @@ function(_spm_build_and_import name version recipe_dir)
         ${_pkg_build_type}
         ${_pkg_build_shared})
 
-    set(_build_dir "${CMAKE_BINARY_DIR}/_spm/${name}/${version}/${_hash}")
+    set(_build_hash_dir "${_hash}")
+    if(WIN32)
+        string(SUBSTRING "${_hash}" 0 16 _build_hash_dir)
+    endif()
+
+    set(_build_dir "${CMAKE_BINARY_DIR}/_spm/${name}/${version}/${_build_hash_dir}")
     set(_cache_dir "${SPM_CACHE_DIRECTORY}/${_letter}/${name}/${_hash}")
 
     set(_input_script_file_name "spm-input.cmake")

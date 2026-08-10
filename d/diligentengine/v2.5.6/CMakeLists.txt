@@ -12,8 +12,14 @@ spm_apply_patch(
 	patches/export-defines.patch
 )
 
-spm_cmake_configure()
-spm_cmake_build()
+set(_cfg_options)
+set(_build_dir b)
+spm_cmake_configure(
+    BUILD_DIR ${_build_dir}
+    OPTIONS
+	"-DCMAKE_OBJECT_PATH_MAX=512"
+)
+spm_cmake_build(BUILD_DIR ${_build_dir})
 
 spm_create_target(
     NAME DiligentEngine
@@ -22,7 +28,7 @@ spm_create_target(
 	"DILIGENT_NO_FORMAT_VALIDATION=OFF"
 )
 
-file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/build/defines.txt defines)
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/${_build_dir}/defines.txt defines)
 foreach(define IN LISTS defines)
     target_compile_definitions(${_target_name} INTERFACE ${define})
 endforeach()
