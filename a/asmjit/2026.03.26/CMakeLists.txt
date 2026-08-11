@@ -8,7 +8,7 @@ spm_git_clone(
 spm_cmake_configure()
 spm_cmake_build()
 
-spm_create_target_from_pkgconfig(
-    NAME assimp
-    MODULE assimp
+spm_create_target(
+    NAME asmjit
+    MODULE asmjit
 )
