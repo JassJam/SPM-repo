@@ -1,9 +1,19 @@
-cmake_minimum_required(VERSION 3.21)
-project(asmjit_pkg)
-include(${SPM_ROOT}/spm.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
-spm_fetch_source(GIT_URL https://github.com/asmjit/asmjit.git GIT_TAG 0bd5787b54b575ed94bf32ac452153b34385c514)
+spm_git_clone(
+	URL https://github.com/asmjit/asmjit.git
+	TAG 0bd5787b54b575ed94bf32ac452153b34385c514
+)
 
-set(ASMJIT_STATIC ${BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
+spm_cmake_configure(
+	OPTIONS
+	"-DASSIMP_INSTALL=ON"
+    "-DASSIMP_WARNINGS_AS_ERRORS=OFF"
+    "-DASSIMP_BUILD_TESTS=OFF"
+)
+spm_cmake_build()
 
-add_subdirectory(${SPM_PKG_SOURCE_DIR} src)
+spm_create_target_from_pkgconfig(
+    NAME assimp
+    MODULE assimp
+)

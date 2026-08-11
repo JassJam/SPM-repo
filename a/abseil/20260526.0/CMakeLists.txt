@@ -1,9 +1,17 @@
-cmake_minimum_required(VERSION 3.21)
-project(abseil_pkg)
-include(${SPM_ROOT}/spm.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
-spm_fetch_source(GIT_URL https://github.com/abseil/abseil-cpp.git GIT_TAG 20260526.0)
+spm_git_clone(
+	URL https://github.com/abseil/abseil-cpp.git
+	TAG 20260526.0
+)
 
-set(ABSL_ENABLE_INSTALL ON CACHE BOOL "" FORCE)
+spm_cmake_configure(
+	OPTIONS
+	"-ABSL_ENABLE_INSTALL=ON"
+)
+spm_cmake_build()
 
-add_subdirectory(${SPM_PKG_SOURCE_DIR} src)
+spm_create_target(
+    NAME abseil
+    MODULE abseil
+)
