@@ -302,6 +302,14 @@ function(spm_cmake_configure)
         set(_pkg_build_shared "OFF")
     endif()
 
+    set(_arch_args "")
+    if(CMAKE_GENERATOR_PLATFORM)
+        list(APPEND _arch_args -DCMAKE_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM})
+    endif()
+    if(CMAKE_TOOLCHAIN_FILE)
+        list(APPEND _arch_args -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE})
+    endif()
+
     spm_execute_process(
         COMMAND
         ${CMAKE_COMMAND}
@@ -313,13 +321,13 @@ function(spm_cmake_configure)
         "${CMAKE_GENERATOR}"
         -C
         "spm-input.cmake"
-        ${B_OPTIONS}
         -DCMAKE_INSTALL_PREFIX=${B_INSTALL_DIR}
         -DCMAKE_BUILD_TYPE=${_pkg_build_type}
-        ${_toolchain_args}
+        "${_arch_args}"
         -DBUILD_SHARED_LIBS=${_pkg_build_shared}
         -DBUILD_TESTING=OFF
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+        ${B_OPTIONS}
         WORKING_DIRECTORY
         "${CMAKE_CURRENT_SOURCE_DIR}"
         RESULT_VARIABLE
@@ -436,7 +444,13 @@ function(spm_create_target)
     endif()
 
     if(IS_DIRECTORY "${B_INSTALL_DIR}/lib")
-        file(GLOB_RECURSE _static_libs "${B_INSTALL_DIR}/lib/*")
+        file(GLOB_RECURSE _static_libs
+            "${B_INSTALL_DIR}/lib/*.a"
+            "${B_INSTALL_DIR}/lib/*.so"
+            "${B_INSTALL_DIR}/lib/*.so.*"
+            "${B_INSTALL_DIR}/lib/*.dylib"
+            "${B_INSTALL_DIR}/lib/*.lib"
+            "${B_INSTALL_DIR}/lib/*.dll")
         list(APPEND _link_libs ${_static_libs})
         install(DIRECTORY "${B_INSTALL_DIR}/lib/" DESTINATION "lib")
     endif()

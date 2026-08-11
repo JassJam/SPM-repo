@@ -1,0 +1,17 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bdb72b60..42cf5061 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -736,9 +736,12 @@ if (MI_BUILD_OBJECT)
+       $<INSTALL_INTERFACE:${mi_install_incdir}>
+   )
+ 
++  get_property(_mi_is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+   # Copy the generated object file (`static.o`) to the output directory (as `mimalloc.o`)
+   if(CMAKE_GENERATOR MATCHES "^Visual Studio.*$")
+     set(mimalloc-obj-static "${CMAKE_CURRENT_BINARY_DIR}/mimalloc-obj.dir/$<CONFIG>/static${CMAKE_C_OUTPUT_EXTENSION}")
++  elseif(_mi_is_multi_config)
++    set(mimalloc-obj-static "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/mimalloc-obj.dir/$<CONFIG>/src/static.c${CMAKE_C_OUTPUT_EXTENSION}")
+   else()
+     set(mimalloc-obj-static "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/mimalloc-obj.dir/src/static.c${CMAKE_C_OUTPUT_EXTENSION}")
+   endif()

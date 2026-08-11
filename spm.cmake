@@ -100,8 +100,9 @@ define_property(
 
 function(_spm_get_build_hash OUT_HASH)
     set(key ":${ARGN}:")
-    foreach(_var CMAKE_SYSTEM_NAME CMAKE_SYSTEM_PROCESSOR CMAKE_GENERATOR CMAKE_BUILD_TYPE CMAKE_C_FLAGS
-                 CMAKE_CXX_FLAGS)
+    foreach(_var CMAKE_GENERATOR_PLATFORM CMAKE_GENERATOR
+                 CMAKE_SYSTEM_NAME CMAKE_SYSTEM_PROCESSOR 
+                 CMAKE_BUILD_TYPE CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
         if(DEFINED ${_var})
             list(APPEND key ${_var}=${${_var}})
         endif()
