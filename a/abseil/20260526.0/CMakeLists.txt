@@ -7,7 +7,7 @@ spm_git_clone(
 
 spm_cmake_configure(
 	OPTIONS
-	"-ABSL_ENABLE_INSTALL=ON"
+	"-DABSL_ENABLE_INSTALL=ON"
 )
 spm_cmake_build()
 
