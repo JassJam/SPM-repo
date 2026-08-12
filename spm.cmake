@@ -116,7 +116,7 @@ endfunction()
 
 function(_spm_build_and_import name version recipe_dir)
     set(options FORCE SHARED)
-    set(oneValArgs GIT_URL GIT_TAG URL HASH IMPORT_NAME)
+    set(oneValArgs GIT_URL GIT_TAG URL HASH IMPORT_NAME OUT_INSTALL_DIR OUT_BUILD_DIR)
     set(multiValArgs PATCHES OPTIONS IMPORT_DEFINITIONS IMPORT_EXCLUDE)
     cmake_parse_arguments(B "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
 
@@ -154,6 +154,14 @@ function(_spm_build_and_import name version recipe_dir)
 
     set(_build_dir "${CMAKE_BINARY_DIR}/_spm/${name}/${version}/${_build_hash_dir}")
     set(_cache_dir "${SPM_CACHE_DIRECTORY}/${_letter}/${name}/${_hash}")
+
+    if(B_OUT_BUILD_DIR)
+        set(${B_OUT_BUILD_DIR} "${_build_dir}" PARENT_SCOPE)
+    endif()
+    if(B_OUT_INSTALL_DIR)
+        set(${B_OUT_INSTALL_DIR} "${_build_dir}/install" PARENT_SCOPE)
+        spm_log("OUT_INSTALL_DIR: ${_build_dir}/install")
+    endif()
 
     set(_input_script_file_name "spm-input.cmake")
     set(_input_script "${_build_dir}/${_input_script_file_name}")
@@ -366,68 +374,114 @@ function(
     endif()
 endfunction()
 
+function(_spm_require_package_enter)
+    set(oneValArgs ALREADY_ENTERED REGISTRY REGISTRY_REF)
+    set(multiValArgs HEADERS)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    get_property(_count GLOBAL PROPERTY SPM_REQUIRE_STACK_COUNT)
+    if(_count)
+        math(EXPR _new_count "${_count} + 1")
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_COUNT "${_new_count}")
+
+        set(${B_ALREADY_ENTERED} TRUE PARENT_SCOPE)
+        spm_log("Re-entering (depth ${_new_count}), loaded saved registry/registry_ref/headers")
+    else()
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_COUNT "1")
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_REGISTRY "${B_REGISTRY}")
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_REGISTRY_REF "${B_REGISTRY_REF}")
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_HEADERS "${B_HEADERS}")
+
+        set(${B_ALREADY_ENTERED} FALSE PARENT_SCOPE)
+        spm_log("Entering (depth 1), saving directory/registry/registry_ref/headers")
+    endif()
+endfunction()
+
+function(_spm_require_package_exit)
+    get_property(_count GLOBAL PROPERTY SPM_REQUIRE_STACK_COUNT)
+    if(NOT _count)
+        spm_log_fatal("_spm_require_package_exit() called without a matching enter")
+    endif()
+
+    math(EXPR _new_count "${_count} - 1")
+
+    if(_new_count LESS_EQUAL 0)
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_COUNT)
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_REGISTRY)
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_REGISTRY_REF)
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_HEADERS)
+        spm_log("Exiting (depth 0), cleared saved directory/registry/registry_ref/headers")
+    else()
+        set_property(GLOBAL PROPERTY SPM_REQUIRE_STACK_COUNT "${_new_count}")
+        spm_log("Exiting (depth ${_new_count})")
+    endif()
+endfunction()
+
 # spm_require_package(
-#   NAME          spdlog
-#   VERSION       1.14.1
-#   [GIT_URL      <override recipe's default>]
-#   [GIT_TAG      <override recipe's default>]
-#   [URL          <override recipe's default>]
-#   [HASH         <override recipe's default>]
-#   [DIRECTORY    <use an explicit local recipe dir instead of resolving via SPM_PACKAGES_DIR/SPM_REGISTRY>]
-#   [REGISTRY]    <override SPM_REGISTRY for this package only>]
-#   [REGISTRY_REF <branch/tag for a git+ registry override, if not the repo's default branch>]
-#   [OPTIONS]     "SOME_OPTION=ON" "OTHER_OPTION=OFF"]
-#   [FORCE]       # force recompile and install the recipe
-#   [SHARED]      # build a shared library instead of static (default)
-#   [IMPORT_NAME  <pakage namespace to use>]
+#   NAME                spdlog
+#   VERSION             1.14.1
+#   [GIT_URL            <override recipe's default>]
+#   [GIT_TAG            <override recipe's default>]
+#   [URL                <override recipe's default>]
+#   [HASH               <override recipe's default>]
+#   [DIRECTORY          <use an explicit local recipe dir instead of resolving via SPM_PACKAGES_DIR/SPM_REGISTRY>]
+#   [REGISTRY]          <override SPM_REGISTRY for this package only>]
+#   [REGISTRY_REF       <branch/tag for a git+ registry override, if not the repo's default branch>]
+#   [OPTIONS]           "SOME_OPTION=ON" "OTHER_OPTION=OFF"]
+#   [FORCE]             # force recompile and install the recipe
+#   [SHARED]            # build a shared library instead of static (default)
+#   [IMPORT_NAME        <pakage namespace to use>]
+#   [OUT_INSTALL_DIR    <install_dir>]
 # )
 function(spm_require_package)
     set(options FORCE SHARED)
     set(oneValArgs
         NAME
         VERSION
-        DIRECTORY
         REGISTRY
         REGISTRY_REF
         GIT_URL
         GIT_TAG
         URL
         HASH
-        IMPORT_NAME)
+        IMPORT_NAME
+        OUT_INSTALL_DIR)
     set(multiValArgs OPTIONS HEADERS IMPORT_DEFINITIONS IMPORT_EXCLUDE)
     cmake_parse_arguments(ARG "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
 
-    if(NOT ARG_NAME)
-        spm_log_fatal("NAME argument is required")
-    endif()
-    if(NOT ARG_VERSION AND NOT ARG_DIRECTORY)
-        spm_log_fatal("VERSION argument is required (or pass DIRECTORY explicitly)")
+    if(NOT ARG_NAME OR NOT ARG_VERSION)
+        spm_log_fatal("NAME and VERSION argument is required")
     endif()
 
-    if(ARG_DIRECTORY)
-        set(_recipe_dir "${ARG_DIRECTORY}")
-        if(NOT EXISTS "${_recipe_dir}/CMakeLists.txt")
-            spm_log_fatal("'${_recipe_dir}' does not contain a CMakeLists.txt")
-        endif()
-    else()
-        if(ARG_REGISTRY)
-            set(_effective_registry "${ARG_REGISTRY}")
-        else()
-            set(_effective_registry "${SPM_REGISTRY}")
-        endif()
-        if(ARG_REGISTRY_REF)
-            set(_effective_ref "${ARG_REGISTRY_REF}")
-        else()
-            set(_effective_ref "${SPM_REGISTRY_REF}")
-        endif()
-        if(ARG_HEADERS)
-            set(_effective_headers "${ARG_HEADERS}")
-        else()
-            set(_effective_headers "${SPM_REGISTRY_HEADERS}")
-        endif()
-        _spm_resolve_recipe_dir("${ARG_NAME}" "${ARG_VERSION}" "${_effective_registry}" "${_effective_ref}"
-                                "${_effective_headers}" _recipe_dir)
+    _spm_require_package_enter(
+        ALREADY_ENTERED _already_entered
+        REGISTRY ${ARG_REGISTRY}
+        REGISTRY_REF ${ARG_REGISTRY_REF}
+        HEADERS ${ARG_HEADERS})
+    if(_already_entered)
+        get_property(ARG_REGISTRY GLOBAL PROPERTY SPM_REQUIRE_STACK_REGISTRY)
+        get_property(ARG_REGISTRY_REF GLOBAL PROPERTY SPM_REQUIRE_STACK_REGISTRY_REF)
+        get_property(ARG_HEADERS GLOBAL PROPERTY SPM_REQUIRE_STACK_HEADERS)
     endif()
+
+    if(ARG_REGISTRY)
+        set(_effective_registry "${ARG_REGISTRY}")
+    else()
+        set(_effective_registry "${SPM_REGISTRY}")
+    endif()
+    if(ARG_REGISTRY_REF)
+        set(_effective_ref "${ARG_REGISTRY_REF}")
+    else()
+        set(_effective_ref "${SPM_REGISTRY_REF}")
+    endif()
+    if(ARG_HEADERS)
+        set(_effective_headers "${ARG_HEADERS}")
+    else()
+        set(_effective_headers "${SPM_REGISTRY_HEADERS}")
+    endif()
+
+    _spm_resolve_recipe_dir("${ARG_NAME}" "${ARG_VERSION}" "${_effective_registry}" "${_effective_ref}"
+                            "${_effective_headers}" _recipe_dir)
 
     set(_unsupported_script "${_recipe_dir}/Support.cmake")
     if(EXISTS "${_unsupported_script}")
@@ -438,6 +492,25 @@ function(spm_require_package)
             return()
         endif()
     endif()
+
+    # set(_dependencies_file "${_recipe_dir}/Depdencies.txt")
+    # if(EXISTS "${_dependencies_file}")
+    #     file(STRINGS ${_dependencies_file} _dependencies)
+    #     foreach(_dep IN LISTS ${_dependencies})
+    #         string(REPLACE ":" ";" _dep ${_dep_list})
+    #         list(LENGTH _dep_list _dep_list_len)
+    #         if(NOT _dep_list_len EQUAL 2)
+    #             spm_log_fatal("Failed to dependencies")
+    #         endif()
+    #         list(GET _dep_list 0 _dep_name)
+    #         list(GET _dep_list 1 _dep_ver)
+    #         spm_require_package(
+    #             NAME ${_dep_name}
+    #             VERSION ${_dep_ver}
+    #             ${ARGV}
+    #         )
+    #     endforeach()
+    # endif()
 
     spm_log("Building & importing '${ARG_NAME}@${ARG_VERSION}' from ${_recipe_dir}")
 
@@ -472,5 +545,12 @@ function(spm_require_package)
         OPTIONS
         ${ARG_OPTIONS}
         ${_force_flag}
-        ${_shared_flag})
+        ${_shared_flag}
+        OUT_INSTALL_DIR _out_install_dir)
+
+    if(ARG_OUT_INSTALL_DIR)
+        set(${ARG_OUT_INSTALL_DIR} "${_out_install_dir}" PARENT_SCOPE)
+    endif()
+
+    _spm_require_package_exit()
 endfunction()
