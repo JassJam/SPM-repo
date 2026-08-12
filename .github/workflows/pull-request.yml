@@ -179,7 +179,6 @@ jobs:
             -DSPM_TEST_PACKAGE_NAME="${{ steps.pkg.outputs.name }}" \
             -DSPM_TEST_PACKAGE_VERSION="${{ steps.pkg.outputs.version }}" \
             -DSPM_TEST_SHARED="$SHARED_FLAG" \
-            -DCMAKE_OBJECT_PATH_MAX=32000 \
             -DSPM_VERBOSE_OUTPUT="ON"
 
       - name: Build ${{ matrix.config.name }}

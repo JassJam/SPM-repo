@@ -404,6 +404,7 @@ function(spm_cmake_configure)
     list(APPEND _args "-DBUILD_SHARED_LIBS=${_pkg_build_shared}")
     list(APPEND _args "-DBUILD_TESTING=OFF")
     list(APPEND _args "-DCMAKE_POSITION_INDEPENDENT_CODE=ON")
+    list(APPEND _args "-DCMAKE_OBJECT_PATH_MAX=512")
 
     spm_execute_process(
         COMMAND

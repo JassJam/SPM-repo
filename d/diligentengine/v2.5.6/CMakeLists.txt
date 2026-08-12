@@ -17,7 +17,6 @@ set(_build_dir b)
 spm_cmake_configure(
     BUILD_DIR ${_build_dir}
     OPTIONS
-	"-DCMAKE_OBJECT_PATH_MAX=512"
 )
 spm_cmake_build(BUILD_DIR ${_build_dir})
 
