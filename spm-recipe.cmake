@@ -374,14 +374,6 @@ function(spm_cmake_configure)
         set(_pkg_build_shared "OFF")
     endif()
 
-    set(_arch_args "")
-    if(CMAKE_GENERATOR_PLATFORM)
-        list(APPEND _arch_args -DCMAKE_GENERATOR_PLATFORM=${CMAKE_GENERATOR_PLATFORM})
-    endif()
-    if(CMAKE_TOOLCHAIN_FILE)
-        list(APPEND _arch_args -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE})
-    endif()
-
     set(_dep_prefix_paths "")
     if(B_DEPENDENCIES)
         get_property(_declared DIRECTORY PROPERTY SPM_RECIPE_DEPENDENCIES)
@@ -406,6 +398,13 @@ function(spm_cmake_configure)
         set(_prefix_path_arg "-DCMAKE_PREFIX_PATH=${_dep_prefix_paths_escaped}")
     endif()
 
+    set(_args "")
+    list(APPEND _args "-DCMAKE_INSTALL_PREFIX=${B_INSTALL_DIR}")
+    list(APPEND _args "-DCMAKE_BUILD_TYPE=${_pkg_build_type}")
+    list(APPEND _args "-DBUILD_SHARED_LIBS=${_pkg_build_shared}")
+    list(APPEND _args "-DBUILD_TESTING=OFF")
+    list(APPEND _args "-DCMAKE_POSITION_INDEPENDENT_CODE=ON")
+
     spm_execute_process(
         COMMAND
         ${CMAKE_COMMAND}
@@ -413,12 +412,7 @@ function(spm_cmake_configure)
         -B ${B_BUILD_DIR}
         -G "${CMAKE_GENERATOR}"
         -C "spm-input.cmake"
-        -DCMAKE_INSTALL_PREFIX=${B_INSTALL_DIR}
-        -DCMAKE_BUILD_TYPE=${_pkg_build_type}
-        "${_arch_args}"
-        -DBUILD_SHARED_LIBS=${_pkg_build_shared}
-        -DBUILD_TESTING=OFF
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+        ${_args}
         ${_prefix_path_arg}
         ${B_OPTIONS}
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"

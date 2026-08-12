@@ -196,13 +196,16 @@ set(SPM_VERBOSE_OUTPUT \"${SPM_VERBOSE_OUTPUT}\" CACHE INTERNAL \"\")
         spm_log("Configuring '${name}@${version}' (${_hash})")
         foreach(
             _var
+            CMAKE_GENERATOR_PLATFORM
             CMAKE_TOOLCHAIN_FILE
             CMAKE_SYSTEM_NAME
             CMAKE_SYSTEM_PROCESSOR
             CMAKE_C_COMPILER
             CMAKE_C_FLAGS
+            CMAKE_C_STANDARD
             CMAKE_CXX_COMPILER
-            CMAKE_CXX_FLAGS)
+            CMAKE_CXX_FLAGS
+            CMAKE_CXX_STANDARD)
             if(DEFINED ${_var})
                 file(APPEND "${_input_script}" "set(${_var} \"${${_var}}\" CACHE INTERNAL \"\" FORCE)\n")
             endif()
