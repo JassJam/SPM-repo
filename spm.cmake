@@ -171,14 +171,14 @@ function(_spm_build_and_import name version recipe_dir)
 set(CMAKE_BUILD_TYPE \"${_pkg_build_type}\" CACHE INTERNAL \"\")
 set(BUILD_SHARED_LIBS \"${_pkg_build_shared}\" CACHE INTERNAL \"\")
 set(CMAKE_PROJECT_INCLUDE \"${_build_dir}/spm-recipe.cmake\" CACHE INTERNAL \"\")
-
-set(SPM_PARALLEL_JOBS \"${SPM_PARALLEL_JOBS}\" CACHE INTERNAL \"\")
-set(SPM_FORCE_REBUILD \"${SPM_FORCE_REBUILD}\" CACHE INTERNAL \"\")
-set(SPM_IMPORT_NAME \"${B_IMPORT_NAME}\" CACHE INTERNAL \"\")
-set(SPM_VERBOSE_OUTPUT \"${SPM_VERBOSE_OUTPUT}\" CACHE INTERNAL \"\")
+set(BUILD_TESTING OFF CACHE INTERNAL \"\")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE INTERNAL \"\")
+set(CMAKE_OBJECT_PATH_MAX 1024 CACHE INTERNAL \"\")
 ")
     block()
         set(SPM_IMPORT_NAME ${B_IMPORT_NAME})
+        set(SPM_BUILD_TYPE ${_pkg_build_type})
+        set(SPM_BUILD_SHARED_LIBS ${_pkg_build_shared})
 
         foreach(_cfg ${B_OPTIONS})
             string(FIND "${_cfg}" "=" _eq_pos)
@@ -496,24 +496,6 @@ function(spm_require_package)
         endif()
     endif()
 
-    # set(_dependencies_file "${_recipe_dir}/Depdencies.txt")
-    # if(EXISTS "${_dependencies_file}")
-    #     file(STRINGS ${_dependencies_file} _dependencies)
-    #     foreach(_dep IN LISTS ${_dependencies})
-    #         string(REPLACE ":" ";" _dep ${_dep_list})
-    #         list(LENGTH _dep_list _dep_list_len)
-    #         if(NOT _dep_list_len EQUAL 2)
-    #             spm_log_fatal("Failed to dependencies")
-    #         endif()
-    #         list(GET _dep_list 0 _dep_name)
-    #         list(GET _dep_list 1 _dep_ver)
-    #         spm_require_package(
-    #             NAME ${_dep_name}
-    #             VERSION ${_dep_ver}
-    #             ${ARGV}
-    #         )
-    #     endforeach()
-    # endif()
 
     spm_log("Building & importing '${ARG_NAME}@${ARG_VERSION}' from ${_recipe_dir}")
 

@@ -9,7 +9,7 @@ set(_spm_repo_root "${CMAKE_CURRENT_LIST_DIR}/..")
 include(${_spm_repo_root}/spm.cmake)
 
 set(_shared_flag "")
-if(SPM_TEST_LINK STREQUAL "shared")
+if(SPM_TEST_SHARED)
 	set(_shared_flag "SHARED")
 endif()
 
