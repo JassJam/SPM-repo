@@ -1,5 +1,7 @@
 include_guard(GLOBAL)
 
+cmake_minimum_required(VERSION 3.24)
+
 set(SPM_PARALLEL_JOBS
     "4"
     CACHE STRING "Parallel build jobs used when building a recipe")
@@ -117,8 +119,12 @@ function(spm_requires)
     # Catch two recipes in the same tree wanting different versions of the same package.
     get_property(_required GLOBAL PROPERTY SPM_REQUIRED_PACKAGES)
     foreach(_entry ${_required})
-        if(_entry MATCHES "^(.*)@(.*)$" AND CMAKE_MATCH_1 STREQUAL R_NAME AND NOT CMAKE_MATCH_2 STREQUAL R_VERSION)
-            spm_log_fatal("Version conflict for '${R_NAME}': already resolved at '${CMAKE_MATCH_2}', now requested at '${R_VERSION}'")
+        if(_entry MATCHES "^(.*)@(.*)$"
+           AND CMAKE_MATCH_1 STREQUAL R_NAME
+           AND NOT CMAKE_MATCH_2 STREQUAL R_VERSION)
+            spm_log_fatal(
+                "Version conflict for '${R_NAME}': already resolved at '${CMAKE_MATCH_2}', now requested at '${R_VERSION}'"
+            )
         endif()
     endforeach()
 
@@ -138,13 +144,19 @@ function(spm_requires)
     endif()
 
     set_property(GLOBAL PROPERTY SPM_DEP_INSTALL_DIR_NAME_${_name} "${_dep_install_dir}")
-    set_property(DIRECTORY APPEND PROPERTY SPM_RECIPE_DEPENDENCIES "${_name}")
+    set_property(
+        DIRECTORY
+        APPEND
+        PROPERTY SPM_RECIPE_DEPENDENCIES "${_name}")
 
     spm_log("Recipe now depends on '${_name}' (installed at ${_dep_install_dir})")
 endfunction()
 
 function(_spm_resolve_dependency_targets deps out_var)
-    get_property(_declared DIRECTORY PROPERTY SPM_RECIPE_DEPENDENCIES)
+    get_property(
+        _declared
+        DIRECTORY
+        PROPERTY SPM_RECIPE_DEPENDENCIES)
     set(_resolved "")
     foreach(_dep ${deps})
         if(_dep MATCHES "^([^:]+)::(.+)$")
@@ -159,7 +171,9 @@ function(_spm_resolve_dependency_targets deps out_var)
         endif()
         list(APPEND _resolved "${_dep_target}")
     endforeach()
-    set(${out_var} "${_resolved}" PARENT_SCOPE)
+    set(${out_var}
+        "${_resolved}"
+        PARENT_SCOPE)
 endfunction()
 
 # Fetches from a git source
@@ -372,7 +386,10 @@ function(spm_cmake_configure)
 
     set(_dep_prefix_paths "")
     if(B_DEPENDENCIES)
-        get_property(_declared DIRECTORY PROPERTY SPM_RECIPE_DEPENDENCIES)
+        get_property(
+            _declared
+            DIRECTORY
+            PROPERTY SPM_RECIPE_DEPENDENCIES)
         foreach(_dep ${B_DEPENDENCIES})
             if(NOT _dep IN_LIST _declared)
                 spm_log_fatal("DEPENDENCIES entry '${_dep}' was not declared via spm_requires() in this recipe")
@@ -400,17 +417,25 @@ function(spm_cmake_configure)
     spm_execute_process(
         COMMAND
         ${CMAKE_COMMAND}
-        -S ${B_SOURCE_DIR}
-        -B ${B_BUILD_DIR}
-        -G "${CMAKE_GENERATOR}"
-        -C "spm-input.cmake"
+        -S
+        ${B_SOURCE_DIR}
+        -B
+        ${B_BUILD_DIR}
+        -G
+        "${CMAKE_GENERATOR}"
+        -C
+        "spm-input.cmake"
         ${_args}
         ${_prefix_path_arg}
         ${B_OPTIONS}
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-        RESULT_VARIABLE _cfg_result
-        OUTPUT_VARIABLE _cfg_output
-        ERROR_VARIABLE _cfg_output)
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _cfg_result
+        OUTPUT_VARIABLE
+        _cfg_output
+        ERROR_VARIABLE
+        _cfg_output)
 
     if(NOT _cfg_result EQUAL 0)
         spm_log_fatal("Configure failed:\n${_cfg_output}")
@@ -474,23 +499,50 @@ endfunction()
 #   NAME <name>
 #   [INSTALL_DIR <path>]
 #   [OUT_TARGET_NAME <name>]
-#   [EXTRA_DIRS <source>[:<destination>] ...]
+#   [EXTRA_DIRS <source>[::<destination>] ...]
+#   [DEPENDENCIES <spm dep names>...]
 # )
 function(spm_create_target)
     set(oneValArgs NAME INSTALL_DIR OUT_TARGET_NAME)
     set(multiValArgs EXTRA_DIRS DEPENDENCIES)
     cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
 
+    if(B_UNPARSED_ARGUMENTS)
+        spm_log_fatal("spm_create_target(NAME ${B_NAME}) got unrecognized arguments: ${B_UNPARSED_ARGUMENTS}")
+    endif()
+
     if(NOT B_INSTALL_DIR)
         set(B_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/install")
     endif()
-
     if(NOT B_NAME)
         spm_log_fatal("spm_create_target requires a name")
     endif()
-
     if(NOT SPM_IMPORT_NAME)
         spm_log_fatal("SPM_IMPORT_NAME is not set (spm_create_target must run inside an SPM recipe build)")
+    endif()
+
+    if(IS_DIRECTORY "${B_INSTALL_DIR}/include")
+        set(_has_include TRUE)
+    else()
+        set(_has_include FALSE)
+    endif()
+    if(IS_DIRECTORY "${B_INSTALL_DIR}/lib")
+        set(_has_lib TRUE)
+    else()
+        set(_has_lib FALSE)
+    endif()
+    if(IS_DIRECTORY "${B_INSTALL_DIR}/bin")
+        set(_has_bin TRUE)
+    else()
+        set(_has_bin FALSE)
+    endif()
+
+    if(NOT _has_include
+       AND NOT _has_lib
+       AND NOT _has_bin)
+        spm_log_fatal(
+            "spm_create_target(NAME ${B_NAME}): '${B_INSTALL_DIR}' has none of include/, lib/, bin/, recipe didn't build/install anything"
+        )
     endif()
 
     set(_target_name "_spm_${SPM_IMPORT_NAME}_${B_NAME}")
@@ -498,33 +550,32 @@ function(spm_create_target)
         spm_log_fatal("Target '${_target_name}' already exists")
     endif()
     if(B_OUT_TARGET_NAME)
-        set(${B_OUT_TARGET_NAME} ${_target_name} PARENT_SCOPE)
+        set(${B_OUT_TARGET_NAME}
+            ${_target_name}
+            PARENT_SCOPE)
     endif()
 
     add_library(${_target_name} INTERFACE IMPORTED GLOBAL)
     add_library(${SPM_IMPORT_NAME}::${B_NAME} ALIAS ${_target_name})
-    spm_log("Registered target '${SPM_IMPORT_NAME}::${B_NAME}'")
 
     set(_link_libs "")
 
-    if(IS_DIRECTORY "${B_INSTALL_DIR}/include")
+    if(_has_include)
         set_target_properties(${_target_name} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${B_INSTALL_DIR}/include")
         install(DIRECTORY "${B_INSTALL_DIR}/include/" DESTINATION "include")
     endif()
 
-    if(IS_DIRECTORY "${B_INSTALL_DIR}/lib")
-        file(GLOB_RECURSE _static_libs
-            "${B_INSTALL_DIR}/lib/*.a"
-            "${B_INSTALL_DIR}/lib/*.so"
-            "${B_INSTALL_DIR}/lib/*.so.*"
-            "${B_INSTALL_DIR}/lib/*.dylib"
-            "${B_INSTALL_DIR}/lib/*.lib"
-            "${B_INSTALL_DIR}/lib/*.dll")
-        list(APPEND _link_libs ${_static_libs})
-        install(DIRECTORY "${B_INSTALL_DIR}/lib/" DESTINATION "lib")
+    if(_has_lib)
+        file(GLOB_RECURSE _static_libs "${B_INSTALL_DIR}/lib/*.a" "${B_INSTALL_DIR}/lib/*.lib")
+        file(GLOB_RECURSE _shared_libs "${B_INSTALL_DIR}/lib/*.so" "${B_INSTALL_DIR}/lib/*.so.*"
+             "${B_INSTALL_DIR}/lib/*.dylib")
+
+        list(JOIN _static_libs "," _static_libs_csv)
+        list(APPEND _link_libs "$<LINK_GROUP:RESCAN,${_static_libs_csv}>")
+        list(APPEND _link_libs ${_shared_libs})
     endif()
 
-    if(IS_DIRECTORY "${B_INSTALL_DIR}/bin")
+    if(_has_bin)
         install(
             DIRECTORY "${B_INSTALL_DIR}/bin/"
             DESTINATION "bin"
@@ -544,30 +595,43 @@ function(spm_create_target)
     endif()
 
     if(_link_libs)
+        install(DIRECTORY "${B_INSTALL_DIR}/lib/" DESTINATION "lib")
         set_target_properties(${_target_name} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_libs}")
     endif()
 
     if(B_EXTRA_DIRS)
         foreach(_pair ${B_EXTRA_DIRS})
-            string(FIND "${_pair}" ":" _sep)
+            string(FIND "${_pair}" "::" _sep)
             if(_sep EQUAL -1)
                 set(_src "${_pair}")
                 set(_dest "${_pair}")
             else()
                 string(SUBSTRING "${_pair}" 0 ${_sep} _src)
-                math(EXPR _dest_start "${_sep} + 1")
+                math(EXPR _dest_start "${_sep} + 2")
                 string(SUBSTRING "${_pair}" ${_dest_start} -1 _dest)
             endif()
+
+            if(_dest STREQUAL "")
+                spm_log_fatal("EXTRA_DIRS entry '${_pair}' has an empty destination")
+            endif()
+
+            if(NOT IS_ABSOLUTE "${_src}")
+                set(_src "${B_INSTALL_DIR}/${_src}")
+            endif()
+
             if(NOT IS_DIRECTORY "${_src}")
                 spm_log_fatal("EXTRA_DIRS source '${_src}' is not a directory")
             endif()
+
             install(DIRECTORY "${_src}/" DESTINATION "${_dest}")
         endforeach()
     elseif(IS_DIRECTORY "${B_INSTALL_DIR}/extra")
         install(DIRECTORY "${B_INSTALL_DIR}/extra/" DESTINATION "share/${B_NAME}")
     endif()
 
-    spm_log("Target '${B_NAME}' created from '${B_INSTALL_DIR}'")
+    spm_log(
+        "Target '${SPM_IMPORT_NAME}::${B_NAME}' registered from '${B_INSTALL_DIR}' (include=${_has_include}, lib=${_has_lib}, bin=${_has_bin})"
+    )
 endfunction()
 
 # Creates a target from a package config
@@ -602,10 +666,8 @@ function(spm_create_target_from_pkgconfig)
     if(B_PKGCONFIG_DIR)
         set(_pc_dirs "${B_PKGCONFIG_DIR}")
     else()
-        set(_pc_dirs
-            "${B_INSTALL_DIR}/lib/pkgconfig"
-            "${B_INSTALL_DIR}/lib64/pkgconfig"
-            "${B_INSTALL_DIR}/share/pkgconfig")
+        set(_pc_dirs "${B_INSTALL_DIR}/lib/pkgconfig" "${B_INSTALL_DIR}/lib64/pkgconfig"
+                     "${B_INSTALL_DIR}/share/pkgconfig")
     endif()
 
     set(_found_pc_dir "")
@@ -645,10 +707,14 @@ function(spm_create_target_from_pkgconfig)
     add_library(${SPM_IMPORT_NAME}::${B_NAME} ALIAS ${_target_name})
 
     if(B_OUT_TARGET_NAME)
-        set(${B_OUT_TARGET_NAME} ${_target_name} PARENT_SCOPE)
+        set(${B_OUT_TARGET_NAME}
+            ${_target_name}
+            PARENT_SCOPE)
     endif()
 
-    spm_log("Registered target '${SPM_IMPORT_NAME}::${B_NAME}' from pkg-config module '${B_MODULE}' (${_found_pc_dir}, prefix ${_pc_prefix})")
+    spm_log(
+        "Registered target '${SPM_IMPORT_NAME}::${B_NAME}' from pkg-config module '${B_MODULE}' (${_found_pc_dir}, prefix ${_pc_prefix})"
+    )
 
     if(IS_DIRECTORY "${B_INSTALL_DIR}/include")
         install(DIRECTORY "${B_INSTALL_DIR}/include/" DESTINATION "include")
@@ -660,6 +726,13 @@ function(spm_create_target_from_pkgconfig)
         install(
             DIRECTORY "${B_INSTALL_DIR}/bin/"
             DESTINATION "bin"
-            FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+            FILE_PERMISSIONS
+                OWNER_READ
+                OWNER_WRITE
+                OWNER_EXECUTE
+                GROUP_READ
+                GROUP_EXECUTE
+                WORLD_READ
+                WORLD_EXECUTE)
     endif()
 endfunction()

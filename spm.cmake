@@ -1,6 +1,6 @@
 include_guard(GLOBAL)
 
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.24)
 
 #
 
@@ -169,7 +169,6 @@ function(_spm_build_and_import name version recipe_dir)
         WRITE "${_input_script}"
         "\
 set(CMAKE_BUILD_TYPE \"${_pkg_build_type}\" CACHE INTERNAL \"\")
-set(BUILD_SHARED_LIBS \"${_pkg_build_shared}\" CACHE INTERNAL \"\")
 set(CMAKE_PROJECT_INCLUDE \"${_build_dir}/spm-recipe.cmake\" CACHE INTERNAL \"\")
 set(BUILD_TESTING OFF CACHE INTERNAL \"\")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE INTERNAL \"\")
