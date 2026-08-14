@@ -10,8 +10,17 @@ spm_apply_patch(
 	patches/mimalloc-multiconfig-obj.patch
 )
 
+set(_static_build "ON")
+set(_shared_build "OFF")
+if(SPM_BUILD_SHARED_LIBS)
+    set(_static_build "OFF")
+	set(_shared_build "ON")
+endif()
+
 spm_cmake_configure(
 	OPTIONS
+	"-DMI_BUILD_STATIC=${_static_build}"
+	"-DMI_BUILD_SHARED=${_shared_build}"
 	"-DMI_BUILD_TESTS=OFF"
 	"-DMI_INSTALL_TOPLEVEL=ON"
 )
@@ -19,5 +28,9 @@ spm_cmake_build()
 
 spm_create_target_from_pkgconfig(
     NAME mimalloc
-    MODULE mimalloc
+    OUT_TARGET_NAME _target_name
 )
+
+if(SPM_BUILD_SHARED_LIBS)
+    target_compile_definitions(${_target_name} INTERFACE MI_SHARED_LIB=1)
+endif()
