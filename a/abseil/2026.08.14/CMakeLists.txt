@@ -1,8 +1,8 @@
 include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
 spm_git_clone(
-	URL https://github.com/asmjit/asmjit.git
-	TAG 0bd5787b54b575ed94bf32ac452153b34385c514
+	URL https://github.com/abseil/abseil-cpp.git
+	TAG 9655f546c336b2df271e83dc223cbbc4d4d7aca5 # Aug 14, 2026
 )
 
 set(_shared_build "OFF")
@@ -12,10 +12,11 @@ endif()
 
 spm_cmake_configure(
 	OPTIONS
+	"-DABSL_ENABLE_INSTALL=ON"
 	"-DBUILD_SHARED_LIBS=${_shared_build}"
 )
 spm_cmake_build()
 
 spm_create_target(
-    NAME asmjit
+    NAME abseil
 )

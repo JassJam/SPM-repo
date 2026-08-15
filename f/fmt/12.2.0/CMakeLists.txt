@@ -19,5 +19,10 @@ spm_cmake_build()
 
 spm_create_target_from_pkgconfig(
     NAME fmt
-    MODULE fmt
+	MODULE fmt
+    OUT_TARGET_NAME _target_name
 )
+
+if(SPM_BUILD_SHARED_LIBS)
+    target_compile_definitions(${_target_name} INTERFACE FMT_LIB_EXPORT=1)
+endif()

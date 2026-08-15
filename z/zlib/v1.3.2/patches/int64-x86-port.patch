@@ -1,0 +1,28 @@
+diff --git a/contrib/minizip/CMakeLists.txt b/contrib/minizip/CMakeLists.txt
+index 80ccf99..7577aca 100644
+--- a/contrib/minizip/CMakeLists.txt
++++ b/contrib/minizip/CMakeLists.txt
+@@ -7,11 +7,6 @@ project(
+     DESCRIPTION "A library for creating zipfiles based in zlib"
+     HOMEPAGE_URL "https://www.winimage.com/zLibDll/minizip.html")
+ 
+-if(CMAKE_SIZEOF_VOID_P LESS 8 AND NOT MINGW)
+-    message(WARNING "libminizip needs 64bit - stopping here")
+-    return()
+-endif(CMAKE_SIZEOF_VOID_P LESS 8 AND NOT MINGW)
+-
+ # ============================================================================
+ # CPack
+ # ============================================================================
+diff --git a/contrib/minizip/ints.h b/contrib/minizip/ints.h
+index 4c84375..d29449f 100644
+--- a/contrib/minizip/ints.h
++++ b/contrib/minizip/ints.h
+@@ -8,6 +8,7 @@
+ #ifndef INTS_H
+ #define INTS_H
+ #include <limits.h>
++#include <stdint.h>
+ #if defined(UCHAR_MAX) && UCHAR_MAX == 0xff
+     typedef signed char i8_t;
+     typedef unsigned char ui8_t;

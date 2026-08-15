@@ -47,7 +47,7 @@ jobs:
     if: needs.detect-changes.outputs.has_packages == 'true'
     timeout-minutes: 60
     strategy:
-      max-parallel: 4
+      max-parallel: 2
       fail-fast: false
       matrix:
         config:
