@@ -5,10 +5,21 @@ spm_git_clone(
 	TAG v4.1.6
 )
 
-spm_cmake_configure()
+set(_static_build "ON")
+set(_shared_build "OFF")
+if(SPM_BUILD_SHARED_LIBS)
+    set(_static_build "OFF")
+	set(_shared_build "ON")
+endif()
+
+spm_cmake_configure(
+	OPTIONS
+	"-DFLECS_STATIC=${_static_build}"
+	"-DFLECS_SHARED=${_shared_build}"
+	"-DFLECS_PIC=ON"
+)
 spm_cmake_build()
 
 spm_create_target(
     NAME flecs
-    MODULE flecs
 )

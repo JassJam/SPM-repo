@@ -5,14 +5,20 @@ spm_git_clone(
 	TAG release-3.4.12
 )
 
+set(_shared_build "OFF")
+if(SPM_BUILD_SHARED_LIBS)
+	set(_shared_build "ON")
+endif()
+
 spm_cmake_configure(
 	OPTIONS
 	"-DSDL_INSTALL=ON"
     "-DSDL_TEST_LIBRARY=OFF"
+	"-DBUILD_SHARED_LIBS=${_shared_build}"
 )
 spm_cmake_build()
 
 spm_create_target_from_pkgconfig(
     NAME SDL3
-    MODULE sdl3
+	MODULE sdl3
 )

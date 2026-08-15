@@ -5,11 +5,17 @@ spm_git_clone(
 	TAG v1.17.0
 )
 
+set(_shared_build "OFF")
+if(SPM_BUILD_SHARED_LIBS)
+	set(_shared_build "ON")
+endif()
+
 spm_cmake_configure(
 	OPTIONS
 	"-DSPDLOG_INSTALL=ON"
 	"-DSPDLOG_SYSTEM_INCLUDES=ON"
     "-DSPDLOG_INSTALL=ON"
+	"-DSPDLOG_BUILD_SHARED=${_shared_build}"
 )
 spm_cmake_build()
 
