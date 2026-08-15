@@ -23,3 +23,7 @@ spm_cmake_build()
 spm_create_target(
     NAME flecs
 )
+
+if(NOT SPM_BUILD_SHARED_LIBS)
+    target_compile_definitions(${_target_name} INTERFACE flecs_STATIC=1)
+endif()
