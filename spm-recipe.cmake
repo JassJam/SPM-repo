@@ -501,10 +501,11 @@ endfunction()
 #   [OUT_TARGET_NAME <name>]
 #   [EXTRA_DIRS <source>[::<destination>] ...]
 #   [DEPENDENCIES <spm dep names>...]
+#   [STATIC_LIBS <libs>...]
 # )
 function(spm_create_target)
     set(oneValArgs NAME INSTALL_DIR OUT_TARGET_NAME)
-    set(multiValArgs EXTRA_DIRS DEPENDENCIES)
+    set(multiValArgs EXTRA_DIRS DEPENDENCIES STATIC_LIBS)
     cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
 
     if(B_UNPARSED_ARGUMENTS)
@@ -566,13 +567,27 @@ function(spm_create_target)
     endif()
 
     if(_has_lib)
-        file(GLOB_RECURSE _static_libs "${B_INSTALL_DIR}/lib/*.a" "${B_INSTALL_DIR}/lib/*.lib")
         file(GLOB_RECURSE _shared_libs "${B_INSTALL_DIR}/lib/*.so" "${B_INSTALL_DIR}/lib/*.so.*"
              "${B_INSTALL_DIR}/lib/*.dylib")
 
-        list(JOIN _static_libs "," _static_libs_csv)
-        list(APPEND _link_libs "$<LINK_GROUP:RESCAN,${_static_libs_csv}>")
-        list(APPEND _link_libs ${_shared_libs})
+        if(B_STATIC_LIBS)
+            set(_static_libs "")
+            foreach(_lib ${B_STATIC_LIBS})
+                if(IS_ABSOLUTE "${_lib}")
+                    set(_lib_path "${_lib}")
+                else()
+                    set(_lib_path "${B_INSTALL_DIR}/lib/${_lib}")
+                endif()
+                if(NOT EXISTS "${_lib_path}")
+                    spm_log_fatal("spm_create_target(NAME ${B_NAME}): static library entry '${_lib}' not found at '${_lib_path}'")
+                endif()
+                list(APPEND _static_libs "${_lib_path}")
+            endforeach()
+        else()
+            file(GLOB_RECURSE _static_libs "${B_INSTALL_DIR}/lib/*.a" "${B_INSTALL_DIR}/lib/*.lib")
+        endif()
+
+        list(APPEND _link_libs ${_static_libs} ${_shared_libs})
     endif()
 
     if(_has_bin)

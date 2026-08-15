@@ -32,5 +32,6 @@ spm_cmake_build()
 
 spm_create_target_from_pkgconfig(
     NAME assimp
+    MODULE assimp
     DEPENDENCIES assimp_deps::zlib
 )

@@ -21,4 +21,5 @@ spm_cmake_build()
 
 spm_create_target_from_pkgconfig(
     NAME spdlog
+    MODULE spdlog
 )
