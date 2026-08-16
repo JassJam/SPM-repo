@@ -1,0 +1,33 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index bdb72b60..77975ea9 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -691,11 +691,11 @@ if(MI_BUILD_SHARED)
+       set(MIMALLOC_REDIRECT_SUFFIX "-${MI_ARCH}")  # -arm64 etc.
+     endif()
+ 
+-    target_link_libraries(mimalloc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bin/mimalloc-redirect${MIMALLOC_REDIRECT_SUFFIX}.lib)  # the DLL import library
++    target_link_libraries(mimalloc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/bin/mimalloc-redirect32.lib)  # the DLL import library
+     add_custom_command(TARGET mimalloc POST_BUILD
+-      COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/bin/mimalloc-redirect${MIMALLOC_REDIRECT_SUFFIX}.dll" $<TARGET_FILE_DIR:mimalloc>
+-      COMMENT "Copy mimalloc-redirect${MIMALLOC_REDIRECT_SUFFIX}.dll to output directory")
+-    install(FILES "$<TARGET_FILE_DIR:mimalloc>/mimalloc-redirect${MIMALLOC_REDIRECT_SUFFIX}.dll" DESTINATION ${CMAKE_INSTALL_BINDIR})
++      COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_SOURCE_DIR}/bin/mimalloc-redirect32.dll" $<TARGET_FILE_DIR:mimalloc>
++      COMMENT "Copy mimalloc-redirect32.dll to output directory")
++    install(FILES "$<TARGET_FILE_DIR:mimalloc>/mimalloc-redirect32.dll" DESTINATION ${CMAKE_INSTALL_BINDIR})
+   endif()
+ endif()
+ 
+@@ -736,9 +736,12 @@ if (MI_BUILD_OBJECT)
+       $<INSTALL_INTERFACE:${mi_install_incdir}>
+   )
+ 
++  get_property(_mi_is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+   # Copy the generated object file (`static.o`) to the output directory (as `mimalloc.o`)
+   if(CMAKE_GENERATOR MATCHES "^Visual Studio.*$")
+     set(mimalloc-obj-static "${CMAKE_CURRENT_BINARY_DIR}/mimalloc-obj.dir/$<CONFIG>/static${CMAKE_C_OUTPUT_EXTENSION}")
++  elseif(_mi_is_multi_config)
++    set(mimalloc-obj-static "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/mimalloc-obj.dir/$<CONFIG>/src/static.c${CMAKE_C_OUTPUT_EXTENSION}")
+   else()
+     set(mimalloc-obj-static "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/mimalloc-obj.dir/src/static.c${CMAKE_C_OUTPUT_EXTENSION}")
+   endif()

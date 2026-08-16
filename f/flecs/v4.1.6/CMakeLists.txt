@@ -22,6 +22,7 @@ spm_cmake_build()
 
 spm_create_target(
     NAME flecs
+    OUT_TARGET_NAME _target_name
 )
 
 if(NOT SPM_BUILD_SHARED_LIBS)
