@@ -10,6 +10,13 @@ spm_apply_patch(
 	patches/mimalloc-multiconfig-obj.patch
 )
 
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+	spm_apply_patch(
+		PATCHES
+		patches/x86-port.patch
+	)
+endif()
+
 set(_static_build "ON")
 set(_shared_build "OFF")
 if(SPM_BUILD_SHARED_LIBS)

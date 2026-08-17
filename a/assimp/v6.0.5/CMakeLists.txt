@@ -6,6 +6,8 @@ spm_requires(
     IMPORT_NAME assimp_deps
     OPTIONS
     "ZLIB_BUILD_MINIZIP=ON"
+    "MINIZIP_INSTALL=ON"
+    "MINIZIP_ENABLE_BZIP2=OFF"
     "MINIZIP_BUILD_STATIC=ON"
     "MINIZIP_BUILD_SHARED=OFF"
 )
@@ -30,8 +32,7 @@ spm_cmake_configure(
 )
 spm_cmake_build()
 
-spm_create_target_from_pkgconfig(
+spm_create_target(
     NAME assimp
-    MODULE assimp
     DEPENDENCIES assimp_deps::zlib
 )
