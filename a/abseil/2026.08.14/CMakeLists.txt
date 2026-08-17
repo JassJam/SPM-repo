@@ -19,4 +19,9 @@ spm_cmake_build()
 
 spm_create_target(
     NAME abseil
+	OUT_TARGET_NAME _target_name
 )
+
+if(SPM_BUILD_SHARED_LIBS)
+    target_compile_definitions(${_target_name} INTERFACE ABSL_CONSUME_DLL)
+endif()
