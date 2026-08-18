@@ -185,10 +185,3 @@ jobs:
       - name: Build ${{ matrix.config.name }}
         shell: bash
         run: cmake --build build --config Release
-
-      - name: Testing inspect
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: boost-install-debug
-          path: build/**
