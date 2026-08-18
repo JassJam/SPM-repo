@@ -191,4 +191,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: boost-install-debug
-          path: build/_spm/boost/**/install/include/boost/uuid*
+          path: build/**
