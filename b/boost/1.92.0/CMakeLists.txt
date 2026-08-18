@@ -13,7 +13,15 @@ spm_extract_archive(
     DELETE_ARCHIVE
 )
 
-spm_cmake_configure()
+set(_options "")
+if(NOT BOOST_INSTALL_LAYOUT)
+    list(APPEND _options "-DBOOST_INSTALL_LAYOUT=system")
+endif()
+
+spm_cmake_configure(
+    OPTIONS
+    ${_options}
+)
 spm_cmake_build()
 
 spm_create_target(
