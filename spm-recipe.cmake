@@ -306,6 +306,201 @@ function(spm_git_clone)
     endif()
 endfunction()
 
+# Downloads a file, with header/auth support, hash verification, and retry.
+#
+# spm_download_file(
+#   URL <url>
+#   DESTINATION <path>
+#   [HEADERS "Header: value" ...]
+#   [EXPECTED_HASH <ALGO>=<value>]
+#   [TIMEOUT <seconds>]
+#   [RETRIES <n>]
+#   [FORCE]
+# )
+function(spm_download_file)
+    set(options FORCE)
+    set(oneValArgs URL DESTINATION EXPECTED_HASH TIMEOUT RETRIES)
+    set(multiValArgs HEADERS)
+    cmake_parse_arguments(B "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(B_UNPARSED_ARGUMENTS)
+        spm_log_fatal("spm_download_file() got unrecognized arguments: ${B_UNPARSED_ARGUMENTS}")
+    endif()
+
+    if(NOT B_URL)
+        spm_log_fatal("spm_download_file() requires a URL")
+    endif()
+    if(NOT B_DESTINATION)
+        spm_log_fatal("spm_download_file() requires a DESTINATION")
+    endif()
+
+    if(NOT IS_ABSOLUTE "${B_DESTINATION}")
+        set(B_DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/${B_DESTINATION}")
+    endif()
+
+    if(NOT B_RETRIES)
+        set(B_RETRIES 3)
+    endif()
+
+    # Stamp is keyed off URL + destination + expected hash, so changing any of
+    # those forces a re-download even if a stale file is sitting at DESTINATION.
+    string(SHA256 _stamp_key "${B_URL}|${B_DESTINATION}|${B_EXPECTED_HASH}")
+    set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-download-${_stamp_key}")
+
+    spm_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
+    if(${exists} AND EXISTS "${B_DESTINATION}")
+        return()
+    endif()
+
+    get_filename_component(_dest_dir "${B_DESTINATION}" DIRECTORY)
+    if(_dest_dir AND NOT EXISTS "${_dest_dir}")
+        file(MAKE_DIRECTORY "${_dest_dir}")
+    endif()
+
+    set(_download_args
+        "${B_URL}" "${B_DESTINATION}"
+        STATUS _status
+        LOG _log
+        TLS_VERIFY ON)
+
+    if(B_TIMEOUT)
+        list(APPEND _download_args TIMEOUT "${B_TIMEOUT}")
+    endif()
+    if(B_HEADERS)
+        list(APPEND _download_args HTTPHEADER "${B_HEADERS}")
+    endif()
+
+    if(B_EXPECTED_HASH)
+        list(APPEND _download_args EXPECTED_HASH "${B_EXPECTED_HASH}")
+    endif()
+
+    spm_log("Downloading '${B_URL}' to '${B_DESTINATION}'")
+
+    set(_attempt 0)
+    set(_ok FALSE)
+    while(NOT _ok AND _attempt LESS B_RETRIES)
+        math(EXPR _attempt "${_attempt} + 1")
+
+        file(DOWNLOAD ${_download_args})
+
+        list(GET _status 0 _status_code)
+        list(GET _status 1 _status_msg)
+
+        if(_status_code EQUAL 0)
+            set(_ok TRUE)
+        else()
+            spm_log("Download attempt ${_attempt}/${B_RETRIES} failed (${_status_code}: ${_status_msg})")
+            if(EXISTS "${B_DESTINATION}")
+                file(REMOVE "${B_DESTINATION}")
+            endif()
+        endif()
+    endwhile()
+
+    if(NOT _ok)
+        spm_log_fatal(
+            "Failed to download '${B_URL}' after ${B_RETRIES} attempt(s): ${_status_msg}\nLog:\n${_log}"
+        )
+    endif()
+
+    spm_stamp_file(FILE "${_stamp_file}")
+    spm_log("Downloaded '${B_DESTINATION}' (${_attempt} attempt(s))")
+endfunction()
+
+# Extracts an archive via libarchive.
+#
+# spm_extract_archive(
+#   ARCHIVE <path>
+#   DESTINATION <path>
+#   [STRIP_COMPONENTS <n>]
+#   [DELETE_ARCHIVE]
+# )
+function(spm_extract_archive)
+    set(options DELETE_ARCHIVE)
+    set(oneValArgs ARCHIVE DESTINATION STRIP_COMPONENTS)
+    cmake_parse_arguments(B "${options}" "${oneValArgs}" "" ${ARGN})
+
+    if(B_UNPARSED_ARGUMENTS)
+        spm_log_fatal("spm_extract_archive() got unrecognized arguments: ${B_UNPARSED_ARGUMENTS}")
+    endif()
+    if(NOT B_ARCHIVE)
+        spm_log_fatal("spm_extract_archive() requires ARCHIVE")
+    endif()
+    if(NOT B_DESTINATION)
+        spm_log_fatal("spm_extract_archive() requires DESTINATION")
+    endif()
+    if(NOT B_STRIP_COMPONENTS)
+        set(B_STRIP_COMPONENTS 0)
+    endif()
+
+    if(NOT IS_ABSOLUTE "${B_ARCHIVE}")
+        set(B_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/${B_ARCHIVE}")
+    endif()
+    if(NOT IS_ABSOLUTE "${B_DESTINATION}")
+        set(B_DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/${B_DESTINATION}")
+    endif()
+
+    if(NOT EXISTS "${B_ARCHIVE}")
+        spm_log_fatal("spm_extract_archive(): archive '${B_ARCHIVE}' does not exist")
+    endif()
+
+    string(SHA256 _stamp_key "${B_ARCHIVE}|${B_DESTINATION}|${B_STRIP_COMPONENTS}")
+    set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-extract-${_stamp_key}")
+
+    spm_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
+    if(${exists} AND EXISTS "${B_DESTINATION}")
+        return()
+    endif()
+
+    if(EXISTS "${B_DESTINATION}")
+        file(REMOVE_RECURSE "${B_DESTINATION}")
+    endif()
+    file(MAKE_DIRECTORY "${B_DESTINATION}")
+
+    if(B_STRIP_COMPONENTS GREATER 0)
+        # Extract to a scratch dir first, then peel off N path components
+        # while moving everything into DESTINATION.
+        set(_scratch_dir "${B_DESTINATION}.spm-extract-tmp")
+        if(EXISTS "${_scratch_dir}")
+            file(REMOVE_RECURSE "${_scratch_dir}")
+        endif()
+        file(MAKE_DIRECTORY "${_scratch_dir}")
+
+        spm_log("Extracting '${B_ARCHIVE}' to '${_scratch_dir}' (will strip ${B_STRIP_COMPONENTS} component(s))")
+        file(ARCHIVE_EXTRACT INPUT "${B_ARCHIVE}" DESTINATION "${_scratch_dir}")
+
+        set(_src_dir "${_scratch_dir}")
+        foreach(_i RANGE 1 ${B_STRIP_COMPONENTS})
+            file(GLOB _children "${_src_dir}/*")
+            list(LENGTH _children _n_children)
+            if(NOT _n_children EQUAL 1 OR NOT IS_DIRECTORY "${_children}")
+                spm_log_fatal(
+                    "spm_extract_archive(): cannot strip ${B_STRIP_COMPONENTS} component(s), "
+                    "'${_src_dir}' does not contain exactly one subdirectory at depth ${_i}"
+                )
+            endif()
+            set(_src_dir "${_children}")
+        endforeach()
+
+        file(GLOB _final_children "${_src_dir}/*")
+        foreach(_child ${_final_children})
+            file(COPY "${_child}" DESTINATION "${B_DESTINATION}")
+        endforeach()
+
+        file(REMOVE_RECURSE "${_scratch_dir}")
+    else()
+        spm_log("Extracting '${B_ARCHIVE}' to '${B_DESTINATION}'")
+        file(ARCHIVE_EXTRACT INPUT "${B_ARCHIVE}" DESTINATION "${B_DESTINATION}")
+    endif()
+
+    spm_stamp_file(FILE "${_stamp_file}")
+    spm_log("Extracted '${B_ARCHIVE}' to '${B_DESTINATION}'")
+
+    if(B_DELETE_ARCHIVE)
+        file(REMOVE "${B_ARCHIVE}")
+        spm_log("Deleted archive '${B_ARCHIVE}'")
+    endif()
+endfunction()
+
 # Patches source
 # spm_apply_patch(
 #   PATCHES ...
