@@ -26,3 +26,8 @@ spm_create_target_from_pkgconfig(
 if(SPM_BUILD_SHARED_LIBS)
     target_compile_definitions(${_target_name} INTERFACE FMT_LIB_EXPORT=1)
 endif()
+
+if(NOT MSVC AND FMT_UNICODE)
+	target_compile_options(main PRIVATE "$<$<C_COMPILER_ID:MSVC>:/utf-8>")
+	target_compile_options(main PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
+endif()
