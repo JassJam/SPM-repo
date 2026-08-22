@@ -5,6 +5,11 @@ spm_git_clone(
 	TAG may2026
 )
 
+spm_apply_patch(
+    PATCHES
+        patches/size_t.patch
+)
+
 spm_cmake_configure()
 spm_cmake_build()
 
