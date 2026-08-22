@@ -49,7 +49,7 @@ if(IMGUI_WGPU)
     list(APPEND _deps wgpu-native::wgpu-native)
 endif()
 if(IMGUI_FREETYPE)
-    spm_requires(NAME freetype VERSION 2.13.3)
+    spm_requires(NAME freetype VERSION 2.414.3)
     list(APPEND _deps freetype::freetype)
 endif()
 
