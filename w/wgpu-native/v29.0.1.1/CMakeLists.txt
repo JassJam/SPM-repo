@@ -99,4 +99,17 @@ spm_extract_archive(
 
 spm_create_target(
     NAME wgpu-native
+    OUT_TARGET_NAME _target_name
 )
+
+if(APPLE)
+    target_link_libraries(${_target_name} INTERFACE
+        "-framework Cocoa"
+        "-framework IOKit"
+        "-framework CoreVideo"
+        "-framework QuartzCore"
+        "-framework Metal"
+        "-framework MetalKit"
+        "objc"
+    )
+endif()

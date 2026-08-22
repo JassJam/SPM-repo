@@ -1,2 +1,2 @@
 add_executable(main main.cpp)
-target_link_libraries(main wgpu::wgpu)
+target_link_libraries(main wgpu-native::wgpu-native)
