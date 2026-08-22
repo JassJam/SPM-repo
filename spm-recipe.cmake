@@ -59,13 +59,13 @@ endmacro()
 
 #
 
-# Checks/writes a stamp file, used to not repatch/do expensive operations
+# Checks whether a stamp file exists. Never writes.
 #
-# spm_stamp_file(
+# spm_check_stamp_file(
 #   [FILE .spm-stamped]
-#   OUT_VAR <var> # sets tp true if the stamp already exists
+#   OUT_VAR <var> # TRUE if the stamp already exists
 # )
-function(spm_stamp_file)
+function(spm_check_stamp_file)
     set(oneValArgs FILE OUT_VAR)
     cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
 
@@ -73,24 +73,42 @@ function(spm_stamp_file)
         set(B_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.spm-stamped")
     endif()
 
-    if(B_OUT_VAR)
-        if(EXISTS "${B_FILE}")
-            set(${B_OUT_VAR}
-                TRUE
-                PARENT_SCOPE)
-            spm_log("Stamp file ${B_FILE} exists, ignoring")
-        else()
-            set(${B_OUT_VAR}
-                FALSE
-                PARENT_SCOPE)
-            get_filename_component(_stamp_dir "${B_FILE}" DIRECTORY)
-            if(_stamp_dir AND NOT EXISTS "${_stamp_dir}")
-                file(MAKE_DIRECTORY "${_stamp_dir}")
-            endif()
-            file(WRITE "${B_FILE}" "ok")
-            spm_log("Stamped '${B_FILE}'")
-        endif()
+    if(NOT B_OUT_VAR)
+        spm_log_fatal("spm_check_stamp_file() requires OUT_VAR")
     endif()
+
+    if(EXISTS "${B_FILE}")
+        set(${B_OUT_VAR}
+            TRUE
+            PARENT_SCOPE)
+        spm_log("Stamp file ${B_FILE} exists, ignoring")
+    else()
+        set(${B_OUT_VAR}
+            FALSE
+            PARENT_SCOPE)
+    endif()
+endfunction()
+
+# Writes a stamp file. Call this only once the guarded operation has
+# actually succeeded.
+#
+# spm_write_stamp_file(
+#   [FILE .spm-stamped]
+# )
+function(spm_write_stamp_file)
+    set(oneValArgs FILE)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_FILE)
+        set(B_FILE "${CMAKE_CURRENT_SOURCE_DIR}/.spm-stamped")
+    endif()
+
+    get_filename_component(_stamp_dir "${B_FILE}" DIRECTORY)
+    if(_stamp_dir AND NOT EXISTS "${_stamp_dir}")
+        file(MAKE_DIRECTORY "${_stamp_dir}")
+    endif()
+    file(WRITE "${B_FILE}" "ok")
+    spm_log("Stamped '${B_FILE}'")
 endfunction()
 
 # Declares that the current recipe depends on another package.
@@ -192,7 +210,8 @@ function(spm_git_clone)
         set(B_DESTINATION source)
     endif()
 
-    spm_stamp_file(FILE "${CMAKE_CURRENT_SOURCE_DIR}/.spm-gitclone-${B_DESTINATION}" OUT_VAR exists)
+    set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-gitclone-${B_DESTINATION}")
+    spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
     if(exists)
         return()
     endif()
@@ -301,9 +320,12 @@ function(spm_git_clone)
             ERROR_VARIABLE
             _submod_output)
         if(NOT _submod_result EQUAL 0)
+            file(REMOVE_RECURSE "${_dest_file}")
             spm_log_fatal("git submodule update failed:\n${_submod_output}")
         endif()
     endif()
+
+    spm_write_stamp_file(FILE "${_stamp_file}")
 endfunction()
 
 # Downloads a file, with header/auth support, hash verification, and retry.
@@ -326,7 +348,6 @@ function(spm_download_file)
     if(B_UNPARSED_ARGUMENTS)
         spm_log_fatal("spm_download_file() got unrecognized arguments: ${B_UNPARSED_ARGUMENTS}")
     endif()
-
     if(NOT B_URL)
         spm_log_fatal("spm_download_file() requires a URL")
     endif()
@@ -342,12 +363,10 @@ function(spm_download_file)
         set(B_RETRIES 3)
     endif()
 
-    # Stamp is keyed off URL + destination + expected hash, so changing any of
-    # those forces a re-download even if a stale file is sitting at DESTINATION.
     string(SHA256 _stamp_key "${B_URL}|${B_DESTINATION}|${B_EXPECTED_HASH}")
     set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-download-${_stamp_key}")
 
-    spm_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
+    spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
     if(${exists} AND EXISTS "${B_DESTINATION}")
         return()
     endif()
@@ -358,18 +377,20 @@ function(spm_download_file)
     endif()
 
     set(_download_args
-        "${B_URL}" "${B_DESTINATION}"
-        STATUS _status
-        LOG _log
-        TLS_VERIFY ON)
-
+        "${B_URL}"
+        "${B_DESTINATION}"
+        STATUS
+        _status
+        LOG
+        _log
+        TLS_VERIFY
+        ON)
     if(B_TIMEOUT)
         list(APPEND _download_args TIMEOUT "${B_TIMEOUT}")
     endif()
     if(B_HEADERS)
         list(APPEND _download_args HTTPHEADER "${B_HEADERS}")
     endif()
-
     if(B_EXPECTED_HASH)
         list(APPEND _download_args EXPECTED_HASH "${B_EXPECTED_HASH}")
     endif()
@@ -380,9 +401,7 @@ function(spm_download_file)
     set(_ok FALSE)
     while(NOT _ok AND _attempt LESS B_RETRIES)
         math(EXPR _attempt "${_attempt} + 1")
-
         file(DOWNLOAD ${_download_args})
-
         list(GET _status 0 _status_code)
         list(GET _status 1 _status_msg)
 
@@ -397,12 +416,10 @@ function(spm_download_file)
     endwhile()
 
     if(NOT _ok)
-        spm_log_fatal(
-            "Failed to download '${B_URL}' after ${B_RETRIES} attempt(s): ${_status_msg}\nLog:\n${_log}"
-        )
+        spm_log_fatal("Failed to download '${B_URL}' after ${B_RETRIES} attempt(s): ${_status_msg}\nLog:\n${_log}")
     endif()
 
-    spm_stamp_file(FILE "${_stamp_file}")
+    spm_write_stamp_file(FILE "${_stamp_file}")
     spm_log("Downloaded '${B_DESTINATION}' (${_attempt} attempt(s))")
 endfunction()
 
@@ -446,7 +463,7 @@ function(spm_extract_archive)
     string(SHA256 _stamp_key "${B_ARCHIVE}|${B_DESTINATION}|${B_STRIP_COMPONENTS}")
     set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-extract-${_stamp_key}")
 
-    spm_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
+    spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
     if(${exists} AND EXISTS "${B_DESTINATION}")
         return()
     endif()
@@ -457,8 +474,6 @@ function(spm_extract_archive)
     file(MAKE_DIRECTORY "${B_DESTINATION}")
 
     if(B_STRIP_COMPONENTS GREATER 0)
-        # Extract to a scratch dir first, then peel off N path components
-        # while moving everything into DESTINATION.
         set(_scratch_dir "${B_DESTINATION}.spm-extract-tmp")
         if(EXISTS "${_scratch_dir}")
             file(REMOVE_RECURSE "${_scratch_dir}")
@@ -473,10 +488,9 @@ function(spm_extract_archive)
             file(GLOB _children "${_src_dir}/*")
             list(LENGTH _children _n_children)
             if(NOT _n_children EQUAL 1 OR NOT IS_DIRECTORY "${_children}")
-                spm_log_fatal(
-                    "spm_extract_archive(): cannot strip ${B_STRIP_COMPONENTS} component(s), "
-                    "'${_src_dir}' does not contain exactly one subdirectory at depth ${_i}"
-                )
+                file(REMOVE_RECURSE "${_scratch_dir}")
+                spm_log_fatal("spm_extract_archive(): cannot strip ${B_STRIP_COMPONENTS} component(s), "
+                              "'${_src_dir}' does not contain exactly one subdirectory at depth ${_i}")
             endif()
             set(_src_dir "${_children}")
         endforeach()
@@ -492,7 +506,7 @@ function(spm_extract_archive)
         file(ARCHIVE_EXTRACT INPUT "${B_ARCHIVE}" DESTINATION "${B_DESTINATION}")
     endif()
 
-    spm_stamp_file(FILE "${_stamp_file}")
+    spm_write_stamp_file(FILE "${_stamp_file}")
     spm_log("Extracted '${B_ARCHIVE}' to '${B_DESTINATION}'")
 
     if(B_DELETE_ARCHIVE)
@@ -526,7 +540,8 @@ function(spm_apply_patch)
         endif()
 
         string(SHA256 _hash "${_patch_file}")
-        spm_stamp_file(FILE "${CMAKE_CURRENT_SOURCE_DIR}/.spm-patch-${_hash}" OUT_VAR exists)
+        set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-patch-${_hash}")
+        spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
         if(exists)
             continue()
         endif()
@@ -549,6 +564,8 @@ function(spm_apply_patch)
         if(NOT _patch_result EQUAL 0)
             spm_log_fatal("Failed to apply patch '${_patch}':\n${_patch_output}")
         endif()
+
+        spm_write_stamp_file(FILE "${_stamp_file}")
     endforeach()
 endfunction()
 
@@ -602,8 +619,18 @@ function(spm_cmake_configure)
 
     set(_prefix_path_arg "")
     if(_dep_prefix_paths)
-        string(REPLACE ";" "\\;" _dep_prefix_paths_escaped "${_dep_prefix_paths}")
-        set(_prefix_path_arg "-DCMAKE_PREFIX_PATH=${_dep_prefix_paths_escaped}")
+        set(_prefix_cache_file "${CMAKE_CURRENT_SOURCE_DIR}/spm-prefix-path.cmake")
+        file(WRITE "${_prefix_cache_file}" "set(CMAKE_PREFIX_PATH \"")
+        set(_first TRUE)
+        foreach(_p ${_dep_prefix_paths})
+            if(NOT _first)
+                file(APPEND "${_prefix_cache_file}" ";")
+            endif()
+            file(APPEND "${_prefix_cache_file}" "${_p}")
+            set(_first FALSE)
+        endforeach()
+        file(APPEND "${_prefix_cache_file}" "\" CACHE STRING \"\" FORCE)\n")
+        set(_prefix_path_arg -C "${_prefix_cache_file}")
     endif()
 
     set(_args "")
@@ -774,7 +801,8 @@ function(spm_create_target)
                     set(_lib_path "${B_INSTALL_DIR}/lib/${_lib}")
                 endif()
                 if(NOT EXISTS "${_lib_path}")
-                    spm_log_fatal("spm_create_target(NAME ${B_NAME}): static library entry '${_lib}' not found at '${_lib_path}'")
+                    spm_log_fatal(
+                        "spm_create_target(NAME ${B_NAME}): static library entry '${_lib}' not found at '${_lib_path}'")
                 endif()
                 list(APPEND _static_libs "${_lib_path}")
             endforeach()
@@ -807,6 +835,7 @@ function(spm_create_target)
     if(_link_libs)
         install(DIRECTORY "${B_INSTALL_DIR}/lib/" DESTINATION "lib")
         set_target_properties(${_target_name} PROPERTIES INTERFACE_LINK_LIBRARIES "${_link_libs}")
+        target_link_libraries(${_target_name} INTERFACE ${_link_libs})
     endif()
 
     if(B_EXTRA_DIRS)
@@ -838,6 +867,53 @@ function(spm_create_target)
     elseif(IS_DIRECTORY "${B_INSTALL_DIR}/extra")
         install(DIRECTORY "${B_INSTALL_DIR}/extra/" DESTINATION "share/${B_NAME}")
     endif()
+
+    set(_config_dir "${B_INSTALL_DIR}/lib/cmake/${SPM_IMPORT_NAME}")
+    file(MAKE_DIRECTORY "${_config_dir}")
+    set(_config_file "${_config_dir}/${SPM_IMPORT_NAME}Config.cmake")
+
+    if(NOT EXISTS "${_config_file}")
+        file(
+            WRITE "${_config_file}"
+            "# Auto-generated by spm_create_target(). Do not edit by hand.
+get_filename_component(_spm_prefix \"\${CMAKE_CURRENT_LIST_DIR}/../../..\" ABSOLUTE)
+")
+    endif()
+
+    set(_config_link_libs "")
+    foreach(_lib ${_link_libs})
+        if(TARGET "${_lib}")
+            list(APPEND _config_link_libs "${_lib}")
+        elseif(IS_ABSOLUTE "${_lib}" AND EXISTS "${_lib}")
+            file(RELATIVE_PATH _rel "${B_INSTALL_DIR}" "${_lib}")
+            list(APPEND _config_link_libs "\${_spm_prefix}/${_rel}")
+        else()
+            list(APPEND _config_link_libs "${_lib}")
+        endif()
+    endforeach()
+
+    file(
+        APPEND "${_config_file}"
+        "
+if(NOT TARGET ${SPM_IMPORT_NAME}::${B_NAME})
+    add_library(${SPM_IMPORT_NAME}::${B_NAME} INTERFACE IMPORTED)
+")
+    if(_has_include)
+        file(
+            APPEND "${_config_file}"
+            "    set_target_properties(${SPM_IMPORT_NAME}::${B_NAME} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES \"\${_spm_prefix}/include\")\n"
+        )
+    endif()
+    if(_config_link_libs)
+        string(REPLACE ";" ";" _config_link_libs_str "${_config_link_libs}") # keep as list literal
+        file(
+            APPEND "${_config_file}"
+            "    set_target_properties(${SPM_IMPORT_NAME}::${B_NAME} PROPERTIES INTERFACE_LINK_LIBRARIES \"${_config_link_libs_str}\")\n"
+        )
+    endif()
+    file(APPEND "${_config_file}" "endif()\n")
+
+    install(DIRECTORY "${_config_dir}/" DESTINATION "lib/cmake/${SPM_IMPORT_NAME}")
 
     spm_log(
         "Target '${SPM_IMPORT_NAME}::${B_NAME}' registered from '${B_INSTALL_DIR}' (include=${_has_include}, lib=${_has_lib}, bin=${_has_bin})"

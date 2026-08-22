@@ -10,10 +10,15 @@ spm_apply_patch(
 	patches/u128-x86-backport.patch
 )
 
+if(NOT FMT_UNICODE)
+	set(FMT_UNICODE ON)
+endif()
+
 spm_cmake_configure(
 	OPTIONS
 	"-DFMT_INSTALL=ON"
     "-DFMT_TEST=OFF"
+	"-DFMT_UNICODE=${FMT_UNICODE}"
 )
 spm_cmake_build()
 
@@ -25,4 +30,9 @@ spm_create_target_from_pkgconfig(
 
 if(SPM_BUILD_SHARED_LIBS)
     target_compile_definitions(${_target_name} INTERFACE FMT_LIB_EXPORT=1)
+endif()
+
+if(FMT_UNICODE)
+	target_compile_options(${_target_name} INTERFACE "$<$<C_COMPILER_ID:MSVC>:/utf-8>")
+	target_compile_options(${_target_name} INTERFACE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 endif()

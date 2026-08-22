@@ -1,8 +1,8 @@
 include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
 spm_git_clone(
-	URL https://github.com/libsdl-org/SDL.git
-	TAG release-3.4.12
+	URL https://github.com/freetype/freetype.git
+	TAG VER-2-14-3
 )
 
 set(_shared_build "OFF")
@@ -12,13 +12,11 @@ endif()
 
 spm_cmake_configure(
 	OPTIONS
-	"-DSDL_INSTALL=ON"
-    "-DSDL_TEST_LIBRARY=OFF"
 	"-DBUILD_SHARED_LIBS=${_shared_build}"
 )
 spm_cmake_build()
 
 spm_create_target_from_pkgconfig(
-    NAME libsdl3
-	MODULE sdl3
+    NAME freetype
+	MODULE freetype2
 )
