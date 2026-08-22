@@ -98,5 +98,5 @@ spm_extract_archive(
 )
 
 spm_create_target(
-    NAME wgpu
+    NAME wgpu-native
 )

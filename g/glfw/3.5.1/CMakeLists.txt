@@ -29,3 +29,12 @@ spm_create_target_from_pkgconfig(
 if(SPM_BUILD_SHARED_LIBS AND WIN32)
     target_compile_definitions(${_target_name} INTERFACE GLFW_DLL=1)
 endif()
+
+if(APPLE AND NOT SPM_BUILD_SHARED_LIBS)
+    target_link_libraries(${_target_name} INTERFACE
+        "-framework Cocoa"
+        "-framework IOKit"
+        "-framework CoreVideo"
+        "-framework QuartzCore"
+    )
+endif()

@@ -57,22 +57,12 @@ jobs:
             preset: unixlike-x64-clang-release
             output: linux-x64-clang
             configure-file: linux
-          - name: linux-x86-clang
-            os: ubuntu-latest
-            preset: unixlike-x86-clang-release
-            output: linux-x86-clang
-            configure-file: linux
 
           # Linux / GCC
           - name: linux-x64-gcc
             os: ubuntu-latest
             preset: unixlike-x64-gcc-release
             output: linux-x64-gcc
-            configure-file: linux
-          - name: linux-x86-gcc
-            os: ubuntu-latest
-            preset: unixlike-x86-gcc-release
-            output: linux-x86-gcc
             configure-file: linux
 
           # macOS / Clang

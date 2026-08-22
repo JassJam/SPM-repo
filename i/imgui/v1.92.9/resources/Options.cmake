@@ -1,8 +1,6 @@
 include_guard(GLOBAL)
 
 # --- backends -------------------------------------------------------------
-option(IMGUI_INSTALL_DEPENDENCIES "Install imgui dependencies" ON)
-
 option(IMGUI_ANDROID            "Enable the android backend"                            OFF)
 option(IMGUI_DX9                "Enable the dx9 backend"                                OFF)
 option(IMGUI_DX10               "Enable the dx10 backend"                               OFF)

@@ -19,6 +19,6 @@ spm_cmake_configure(
 spm_cmake_build()
 
 spm_create_target_from_pkgconfig(
-    NAME SDL3
+    NAME libsdl3
 	MODULE sdl3
 )
