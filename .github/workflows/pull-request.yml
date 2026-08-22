@@ -57,22 +57,12 @@ jobs:
             preset: unixlike-x64-clang-release
             output: linux-x64-clang
             configure-file: linux
-          - name: linux-x86-clang
-            os: ubuntu-latest
-            preset: unixlike-x86-clang-release
-            output: linux-x86-clang
-            configure-file: linux
 
           # Linux / GCC
           - name: linux-x64-gcc
             os: ubuntu-latest
             preset: unixlike-x64-gcc-release
             output: linux-x64-gcc
-            configure-file: linux
-          - name: linux-x86-gcc
-            os: ubuntu-latest
-            preset: unixlike-x86-gcc-release
-            output: linux-x86-gcc
             configure-file: linux
 
           # macOS / Clang
@@ -174,8 +164,15 @@ jobs:
           if [ "${{ matrix.link }}" = "shared" ]; then
             SHARED_FLAG=ON
           fi
+
+          ARCH="${{ matrix.config.output }}"
+          if [[ "$ARCH" == *x86* && "$ARCH" != *x64* ]]; then
+            export PKG_CONFIG_LIBDIR="/usr/lib/i386-linux-gnu/pkgconfig:/usr/share/pkgconfig"
+            echo "Using i386 pkg-config path: $PKG_CONFIG_LIBDIR"
+          fi
+
           cmake -S .github -B build --preset ${{ matrix.config.preset }} \
-          	-DCMAKE_CXX_STANDARD=${{ matrix.cxx }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.cxx }} \
             -DSPM_TEST_PACKAGE_NAME="${{ steps.pkg.outputs.name }}" \
             -DSPM_TEST_PACKAGE_VERSION="${{ steps.pkg.outputs.version }}" \
             -DSPM_TEST_SHARED="$SHARED_FLAG" \
