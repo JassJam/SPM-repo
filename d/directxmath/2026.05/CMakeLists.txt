@@ -5,6 +5,13 @@ spm_git_clone(
 	TAG may2026
 )
 
+if(NOT WIN32)
+	spm_apply_patch(
+		PATCHES
+			patches/size_t.patch
+	)
+endif()
+
 spm_cmake_configure()
 spm_cmake_build()
 
