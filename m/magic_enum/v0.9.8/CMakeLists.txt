@@ -5,13 +5,6 @@ spm_git_clone(
 	TAG v0.9.8
 )
 
-set(_static_build "ON")
-set(_shared_build "OFF")
-if(SPM_BUILD_SHARED_LIBS)
-    set(_static_build "OFF")
-	set(_shared_build "ON")
-endif()
-
 spm_cmake_configure(
 	OPTIONS
 	"-DMAGIC_ENUM_OPT_BUILD_EXAMPLES=OFF"
