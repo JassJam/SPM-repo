@@ -6,6 +6,10 @@ set(SPM_PARALLEL_JOBS
     "4"
     CACHE STRING "Parallel build jobs used when building a recipe")
 
+set(SPM_LOGGING
+    ON
+    CACHE BOOL "SPM logging")
+
 set(SPM_VERBOSE_OUTPUT
     ON
     CACHE BOOL "Verbose SPM logging")
@@ -40,7 +44,13 @@ macro(_spm_requires_git)
     endif()
 endmacro()
 
-function(spm_log)
+macro(spm_log)
+    if(SPM_LOGGING)
+        message(STATUS "[SPM]: ${ARGV}.")
+    endif()
+endmacro()
+
+function(spm_log_debug)
     if(SPM_VERBOSE_OUTPUT)
         string(REPLACE "\\" "\\\\" _msg "${ARGV}")
         message(STATUS "[SPM]: ${_msg}.")
@@ -53,7 +63,7 @@ function(spm_log_fatal)
 endfunction()
 
 macro(spm_execute_process)
-    spm_log("Executing ${ARGV}")
+    spm_log_debug("Executing ${ARGV}")
     execute_process(${ARGV})
 endmacro()
 
@@ -81,7 +91,7 @@ function(spm_check_stamp_file)
         set(${B_OUT_VAR}
             TRUE
             PARENT_SCOPE)
-        spm_log("Stamp file ${B_FILE} exists, ignoring")
+        spm_log_debug("Stamp file ${B_FILE} exists, ignoring")
     else()
         set(${B_OUT_VAR}
             FALSE
@@ -108,7 +118,7 @@ function(spm_write_stamp_file)
         file(MAKE_DIRECTORY "${_stamp_dir}")
     endif()
     file(WRITE "${B_FILE}" "ok")
-    spm_log("Stamped '${B_FILE}'")
+    spm_log_debug("Stamped '${B_FILE}'")
 endfunction()
 
 # Declares that the current recipe depends on another package.
@@ -150,7 +160,7 @@ function(spm_requires)
     get_property(_dep_install_dir GLOBAL PROPERTY SPM_DEP_INSTALL_DIR_${_pkg_key})
 
     if(_dep_install_dir)
-        spm_log("Dependency '${R_NAME}@${R_VERSION}' already built elsewhere, reusing")
+        spm_log_debug("Dependency '${R_NAME}@${R_VERSION}' already built elsewhere, reusing")
     else()
         include("${CMAKE_CURRENT_SOURCE_DIR}/spm.cmake")
         spm_require_package(${ARGN} OUT_INSTALL_DIR _dep_install_dir)
@@ -167,7 +177,7 @@ function(spm_requires)
         APPEND
         PROPERTY SPM_RECIPE_DEPENDENCIES "${_name}")
 
-    spm_log("Recipe now depends on '${_name}' (installed at ${_dep_install_dir})")
+    spm_log_debug("Recipe now depends on '${_name}' (installed at ${_dep_install_dir})")
 endfunction()
 
 function(_spm_resolve_dependency_targets deps out_var)
@@ -227,7 +237,7 @@ function(spm_git_clone)
         list(APPEND _clone_args --depth 1)
     endif()
 
-    spm_log("Cloning ${B_URL}")
+    spm_log_debug("Cloning ${B_URL}")
     spm_execute_process(
         COMMAND
         ${GIT_EXECUTABLE}
@@ -247,7 +257,7 @@ function(spm_git_clone)
     endif()
 
     if(B_TAG)
-        spm_log("Checking out '${B_TAG}'")
+        spm_log_debug("Checking out '${B_TAG}'")
         spm_execute_process(
             COMMAND
             ${GIT_EXECUTABLE}
@@ -395,7 +405,7 @@ function(spm_download_file)
         list(APPEND _download_args EXPECTED_HASH "${B_EXPECTED_HASH}")
     endif()
 
-    spm_log("Downloading '${B_URL}' to '${B_DESTINATION}'")
+    spm_log_debug("Downloading '${B_URL}' to '${B_DESTINATION}'")
 
     set(_attempt 0)
     set(_ok FALSE)
@@ -408,7 +418,7 @@ function(spm_download_file)
         if(_status_code EQUAL 0)
             set(_ok TRUE)
         else()
-            spm_log("Download attempt ${_attempt}/${B_RETRIES} failed (${_status_code}: ${_status_msg})")
+            spm_log_debug("Download attempt ${_attempt}/${B_RETRIES} failed (${_status_code}: ${_status_msg})")
             if(EXISTS "${B_DESTINATION}")
                 file(REMOVE "${B_DESTINATION}")
             endif()
@@ -420,7 +430,7 @@ function(spm_download_file)
     endif()
 
     spm_write_stamp_file(FILE "${_stamp_file}")
-    spm_log("Downloaded '${B_DESTINATION}' (${_attempt} attempt(s))")
+    spm_log_debug("Downloaded '${B_DESTINATION}' (${_attempt} attempt(s))")
 endfunction()
 
 # Extracts an archive via libarchive.
@@ -480,7 +490,7 @@ function(spm_extract_archive)
         endif()
         file(MAKE_DIRECTORY "${_scratch_dir}")
 
-        spm_log("Extracting '${B_ARCHIVE}' to '${_scratch_dir}' (will strip ${B_STRIP_COMPONENTS} component(s))")
+        spm_log_debug("Extracting '${B_ARCHIVE}' to '${_scratch_dir}' (will strip ${B_STRIP_COMPONENTS} component(s))")
         file(ARCHIVE_EXTRACT INPUT "${B_ARCHIVE}" DESTINATION "${_scratch_dir}")
 
         set(_src_dir "${_scratch_dir}")
@@ -502,16 +512,16 @@ function(spm_extract_archive)
 
         file(REMOVE_RECURSE "${_scratch_dir}")
     else()
-        spm_log("Extracting '${B_ARCHIVE}' to '${B_DESTINATION}'")
+        spm_log_debug("Extracting '${B_ARCHIVE}' to '${B_DESTINATION}'")
         file(ARCHIVE_EXTRACT INPUT "${B_ARCHIVE}" DESTINATION "${B_DESTINATION}")
     endif()
 
     spm_write_stamp_file(FILE "${_stamp_file}")
-    spm_log("Extracted '${B_ARCHIVE}' to '${B_DESTINATION}'")
+    spm_log_debug("Extracted '${B_ARCHIVE}' to '${B_DESTINATION}'")
 
     if(B_DELETE_ARCHIVE)
         file(REMOVE "${B_ARCHIVE}")
-        spm_log("Deleted archive '${B_ARCHIVE}'")
+        spm_log_debug("Deleted archive '${B_ARCHIVE}'")
     endif()
 endfunction()
 
@@ -546,7 +556,7 @@ function(spm_apply_patch)
             continue()
         endif()
 
-        spm_log("Applying patch '${_patch}'")
+        spm_log_debug("Applying patch '${_patch}'")
         spm_execute_process(
             COMMAND
             ${GIT_EXECUTABLE}
@@ -662,7 +672,7 @@ function(spm_cmake_configure)
     if(NOT _cfg_result EQUAL 0)
         spm_log_fatal("Configure failed:\n${_cfg_output}")
     else()
-        spm_log("Configure succeeded:\n${_cfg_output}")
+        spm_log_debug("Configure succeeded:\n${_cfg_output}")
     endif()
 
 endfunction()
@@ -915,7 +925,7 @@ if(NOT TARGET ${SPM_IMPORT_NAME}::${B_NAME})
 
     install(DIRECTORY "${_config_dir}/" DESTINATION "lib/cmake/${SPM_IMPORT_NAME}")
 
-    spm_log(
+    spm_log_debug(
         "Target '${SPM_IMPORT_NAME}::${B_NAME}' registered from '${B_INSTALL_DIR}' (include=${_has_include}, lib=${_has_lib}, bin=${_has_bin})"
     )
 endfunction()
@@ -998,7 +1008,7 @@ function(spm_create_target_from_pkgconfig)
             PARENT_SCOPE)
     endif()
 
-    spm_log(
+    spm_log_debug(
         "Registered target '${SPM_IMPORT_NAME}::${B_NAME}' from pkg-config module '${B_MODULE}' (${_found_pc_dir}, prefix ${_pc_prefix})"
     )
 
