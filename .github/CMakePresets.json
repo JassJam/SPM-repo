@@ -96,28 +96,24 @@
 		},
 
 		{
-			"name": "unixlike-x64-gcc-release",
-			"displayName": "Unix-Like x64 GCC Release",
-			"description": "Target Unix-like OS with the gcc compiler, release build type (x64)",
+			"name": "unixlike-x86_x64-gcc-release",
+			"displayName": "Unix-Like x86_x64 GCC Release",
+			"description": "Target Unix-like OS with the gcc compiler, release build type (x86_x64)",
 			"inherits": ["conf-unixlike-common", "conf-release-common"],
 			"cacheVariables": {
 				"CMAKE_C_COMPILER": "gcc",
-				"CMAKE_CXX_COMPILER": "g++",
-				"CMAKE_C_FLAGS": "-m64",
-				"CMAKE_CXX_FLAGS": "-m64"
+				"CMAKE_CXX_COMPILER": "g++"
 			}
 		},
 		{
-			"name": "unixlike-x64-clang-release",
-			"displayName": "Unix-Like x64 Clang Release",
-			"description": "Target Unix-like OS with the clang compiler, release build type (x64)",
+			"name": "unixlike-x86_x64-clang-release",
+			"displayName": "Unix-Like x86_x64 Clang Release",
+			"description": "Target Unix-like OS with the clang compiler, release build type (x86_x64)",
 			"inherits": ["conf-unixlike-common", "conf-release-common"],
 			"generator": "Ninja Multi-Config",
 			"cacheVariables": {
 				"CMAKE_C_COMPILER": "clang",
-				"CMAKE_CXX_COMPILER": "clang++",
-				"CMAKE_C_FLAGS": "-m64",
-				"CMAKE_CXX_FLAGS": "-m64"
+				"CMAKE_CXX_COMPILER": "clang++"
 			}
 		}
 	]
