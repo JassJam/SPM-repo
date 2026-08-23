@@ -10,8 +10,10 @@ if(SPM_BUILD_SHARED_LIBS)
 	set(_shared_build "ON")
 endif()
 
+set(_deps "")
 if(NOT SPDLOG_USE_STD_FORMAT)
     spm_requires(NAME fmt VERSION 12.2.0)
+	list(APPEND _deps fmt::fmt)
 endif()
 
 spm_cmake_configure(
@@ -20,12 +22,12 @@ spm_cmake_configure(
 		"-DSPDLOG_SYSTEM_INCLUDES=ON"
 		"-DSPDLOG_INSTALL=ON"
 		"-DSPDLOG_BUILD_SHARED=${_shared_build}"
-	DEPENDENCIES fmt::fmt
+	DEPENDENCIES ${_deps}
 )
 spm_cmake_build()
 
 spm_create_target_from_pkgconfig(
     NAME spdlog
     MODULE spdlog
-	DEPENDENCIES fmt::fmt
+	DEPENDENCIES ${_deps}
 )
