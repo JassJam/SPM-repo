@@ -1,2 +1,2 @@
 add_executable(main main.cpp)
-target_link_libraries(main diligentengine::DiligentEngine)
+target_link_libraries(main diligentengine::diligentengine)

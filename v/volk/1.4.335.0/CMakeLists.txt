@@ -2,7 +2,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
 spm_requires(
     NAME vulkan-headers
-    VERSION v1.4.335.0
+    VERSION 1.4.335.0
 )
 
 spm_git_clone(
