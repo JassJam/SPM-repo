@@ -32,7 +32,21 @@ All you need is `spm.cmake`. `spm_require_package()` resolves the recipe,
 builds it if it isn't already cached, and makes the resulting target(s)
 available.
 
+Alternatively, you may use a yaml file to load dependencies.
+
+```cmake
+include(spm-yaml.cmake)
+
+spm_require_packages_from_yaml(
+    FILE <path>
+)
+
+target_link_libraries(app PRIVATE spdlog::spdlog)
+```
+
 ### Common options
+
+Or in cmake file"
 
 ```cmake
 spm_require_package(
@@ -50,6 +64,9 @@ spm_require_package(
     IMPORT_NAME spdlog          # only needed if it differs from NAME
 )
 ```
+
+Or in yaml file
+
 
 ### Where packages come from
 

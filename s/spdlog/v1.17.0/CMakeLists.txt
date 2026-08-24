@@ -20,7 +20,6 @@ spm_cmake_configure(
 	OPTIONS
 		"-DSPDLOG_INSTALL=ON"
 		"-DSPDLOG_SYSTEM_INCLUDES=ON"
-		"-DSPDLOG_INSTALL=ON"
 		"-DSPDLOG_BUILD_SHARED=${_shared_build}"
 	DEPENDENCIES ${_deps}
 )
