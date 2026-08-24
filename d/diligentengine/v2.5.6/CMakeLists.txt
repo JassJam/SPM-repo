@@ -27,21 +27,21 @@ spm_apply_patch(
 
 set(_deps "")
 
-spm_requires(NAME spirv-cross VERSION 1.4.335.0)
+spm_requires(NAME spirv-cross VERSION 1.4.357.0)
 list(APPEND _deps spirv-cross::spirv-cross)
 
 if(NOT DILIGENT_NO_VULKAN)
-    spm_requires(NAME volk VERSION 1.4.335.0)
-    spm_requires(NAME vulkan-headers VERSION 1.4.335.0)
+    spm_requires(NAME volk VERSION 1.4.357.0)
+    spm_requires(NAME vulkan-headers VERSION 1.4.357.0)
     list(APPEND _deps volk::volk vulkan-headers::vulkan-headers)
 endif()
 if(NOT DILIGENT_NO_VULKAN OR (NOT DILIGENT_NO_ARCHIVER AND NOT DILIGENT_NO_OPENGL))
-    spm_requires(NAME spirv-headers VERSION 1.4.335.0)
+    spm_requires(NAME spirv-headers VERSION 1.4.357.0)
     list(APPEND _deps spirv-headers::spirv-headers)
 endif()
 if(NOT DILIGENT_NO_HLSL OR NOT DILIGENT_NO_ARCHIVER OR NOT DILIGENT_NO_OPENGL)
-    spm_requires(NAME glslang VERSION 1.4.335.0)
-    spm_requires(NAME spirv-tools VERSION 1.4.335.0)
+    spm_requires(NAME glslang VERSION 1.4.357.0)
+    spm_requires(NAME spirv-tools VERSION 1.4.357.0)
     list(APPEND _deps glslang::glslang spirv-tools::spirv-tools)
 endif()
 

@@ -2,7 +2,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
 spm_git_clone(
 	URL https://github.com/KhronosGroup/Vulkan-Hpp.git
-	TAG v1.4.335
+	TAG v1.4.357
 )
 
 set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-copy-install")

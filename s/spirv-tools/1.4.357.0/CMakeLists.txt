@@ -2,12 +2,12 @@ include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
 spm_git_clone(
 	URL https://github.com/KhronosGroup/SPIRV-Tools.git
-	TAG vulkan-sdk-1.4.335.0
+	TAG vulkan-sdk-1.4.357.0
 )
 
 spm_git_clone(
 	URL https://github.com/KhronosGroup/SPIRV-Headers.git
-	TAG vulkan-sdk-1.4.335.0
+	TAG vulkan-sdk-1.4.357.0
 	DESTINATION spirv-headers-src
 )
 
