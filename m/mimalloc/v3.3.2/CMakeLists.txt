@@ -33,9 +33,8 @@ spm_cmake_configure(
 )
 spm_cmake_build()
 
-spm_create_target_from_pkgconfig(
+spm_create_target(
     NAME mimalloc
-    MODULE mimalloc
     OUT_TARGET_NAME _target_name
 )
 
