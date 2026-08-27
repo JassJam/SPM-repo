@@ -16,6 +16,13 @@ spm_cmake_configure(
 )
 spm_cmake_build()
 
+file(RENAME
+     ${CMAKE_CURRENT_SOURCE_DIR}/install/include/freetype2/freetype
+     ${CMAKE_CURRENT_SOURCE_DIR}/install/include/freetype)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/install/include/freetype2/ft2build.h
+     DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/install/include)
+file(REMOVE_RECURSE ${CMAKE_CURRENT_SOURCE_DIR}/install/include/freetype2)
+
 spm_create_target(
     NAME freetype
 )
