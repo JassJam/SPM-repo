@@ -25,6 +25,7 @@ spm_cmake_configure(
 )
 spm_cmake_build()
 
-spm_create_target(
+spm_create_target_from_pkgconfig(
 	NAME spirv-tools
+	MODULE SPIRV-Tools
 )

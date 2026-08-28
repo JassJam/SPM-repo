@@ -22,8 +22,9 @@ spm_cmake_configure(
 )
 spm_cmake_build()
 
-spm_create_target(
+spm_create_target_from_pkgconfig(
     NAME fmt
+	MODULE fmt
     OUT_TARGET_NAME _target_name
 )
 
