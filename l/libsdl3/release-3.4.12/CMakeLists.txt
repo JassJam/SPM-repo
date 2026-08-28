@@ -18,7 +18,63 @@ spm_cmake_configure(
 )
 spm_cmake_build()
 
-spm_create_target_from_pkgconfig(
+spm_create_target(
     NAME libsdl3
-	MODULE sdl3
+	OUT_TARGET_NAME _target_name
 )
+
+if(APPLE)
+    find_library(COCOA_FRAMEWORK Cocoa)
+    find_library(IOKIT_FRAMEWORK IOKit)
+    find_library(CARBON_FRAMEWORK Carbon)
+    find_library(FORCEFEEDBACK_FRAMEWORK ForceFeedback)
+    find_library(COREVIDEO_FRAMEWORK CoreVideo)
+    find_library(COREAUDIO_FRAMEWORK CoreAudio)
+    find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
+    find_library(AVFOUNDATION_FRAMEWORK AVFoundation)
+    find_library(COREMEDIA_FRAMEWORK CoreMedia)
+    find_library(COREHAPTICS_FRAMEWORK CoreHaptics)
+    find_library(GAMECONTROLLER_FRAMEWORK GameController)
+    find_library(METAL_FRAMEWORK Metal)
+    find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+    find_library(UNIFORMTYPEIDENTIFIERS_FRAMEWORK UniformTypeIdentifiers)
+    find_library(FOUNDATION_FRAMEWORK Foundation)
+
+    target_link_libraries(${_target_name} INTERFACE
+        ${COCOA_FRAMEWORK}
+        ${IOKIT_FRAMEWORK}
+        ${CARBON_FRAMEWORK}
+        ${FORCEFEEDBACK_FRAMEWORK}
+        ${COREVIDEO_FRAMEWORK}
+        ${COREAUDIO_FRAMEWORK}
+        ${AUDIOTOOLBOX_FRAMEWORK}
+        ${AVFOUNDATION_FRAMEWORK}
+        ${COREMEDIA_FRAMEWORK}
+        ${COREHAPTICS_FRAMEWORK}
+        ${GAMECONTROLLER_FRAMEWORK}
+        ${METAL_FRAMEWORK}
+        ${QUARTZCORE_FRAMEWORK}
+        ${UNIFORMTYPEIDENTIFIERS_FRAMEWORK}
+        ${FOUNDATION_FRAMEWORK}
+        objc
+    )
+endif()
+
+if(WIN32)
+    target_link_libraries(${_target_name} INTERFACE
+        kernel32
+        user32
+        gdi32
+        winmm
+        imm32
+        ole32
+        oleaut32
+        version 
+        uuid
+        advapi32
+        setupapi
+        shell32
+        hid
+        mincore
+    )
+endif()
