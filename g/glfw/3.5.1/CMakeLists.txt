@@ -20,9 +20,8 @@ spm_cmake_configure(
 )
 spm_cmake_build()
 
-spm_create_target_from_pkgconfig(
+spm_create_target(
     NAME glfw
-    MODULE glfw3
     OUT_TARGET_NAME _target_name
 )
 
