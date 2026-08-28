@@ -59,3 +59,22 @@ if(APPLE)
         objc
     )
 endif()
+
+if(WIN32)
+    target_link_libraries(${_target_name} INTERFACE
+        kernel32
+        user32
+        gdi32
+        winmm
+        imm32
+        ole32
+        oleaut32
+        version 
+        uuid
+        advapi32
+        setupapi
+        shell32
+        hid
+        mincore
+    )
+endif()
