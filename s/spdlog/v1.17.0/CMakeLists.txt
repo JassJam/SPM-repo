@@ -5,6 +5,11 @@ spm_git_clone(
 	TAG v1.17.0
 )
 
+spm_apply_patch(
+	PATCHES
+		patches/debug-postfix-check.patch
+)
+
 set(_shared_build "OFF")
 if(SPM_BUILD_SHARED_LIBS)
 	set(_shared_build "ON")
