@@ -21,6 +21,7 @@ spm_cmake_configure(
 		"-DSPDLOG_INSTALL=ON"
 		"-DSPDLOG_SYSTEM_INCLUDES=ON"
 		"-DSPDLOG_BUILD_SHARED=${_shared_build}"
+		"-DSPDLOG_DEBUG_POSTFIX=\"\""
 	DEPENDENCIES ${_deps}
 )
 spm_cmake_build()
