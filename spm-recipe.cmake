@@ -991,12 +991,16 @@ function(spm_create_target_from_pkgconfig)
         spm_log_fatal("pkg-config target 'PkgConfig::${_pc_prefix}' already exists")
     endif()
 
+    set(_saved_prefix_path "${CMAKE_PREFIX_PATH}")
+    set(CMAKE_PREFIX_PATH "")
+
     set(_saved_pkg_config_path "$ENV{PKG_CONFIG_PATH}")
     set(ENV{PKG_CONFIG_PATH} "${_found_pc_dir}")
 
     pkg_check_modules(${_pc_prefix} REQUIRED IMPORTED_TARGET GLOBAL "${B_MODULE}")
 
     set(ENV{PKG_CONFIG_PATH} "${_saved_pkg_config_path}")
+    set(CMAKE_PREFIX_PATH "${_saved_prefix_path}")
 
     add_library(${_target_name} INTERFACE IMPORTED GLOBAL)
     set(_dep_targets "")
