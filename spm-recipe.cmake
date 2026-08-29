@@ -377,12 +377,48 @@ function(spm_download_file)
         set(B_RETRIES 3)
     endif()
 
+    set(_hash_algo "")
+    set(_hash_value "")
+    if(B_EXPECTED_HASH)
+        if(NOT B_EXPECTED_HASH MATCHES "^([A-Za-z0-9]+)=([0-9A-Fa-f]+)$")
+            spm_log_fatal("spm_download_file(): EXPECTED_HASH must be of the form ALGO=value, got '${B_EXPECTED_HASH}'")
+        endif()
+        set(_hash_algo "${CMAKE_MATCH_1}")
+        string(TOLOWER "${CMAKE_MATCH_2}" _hash_value)
+    endif()
+
     string(SHA256 _stamp_key "${B_URL}|${B_DESTINATION}|${B_EXPECTED_HASH}")
     set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-download-${_stamp_key}")
 
-    spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
-    if(${exists} AND EXISTS "${B_DESTINATION}")
+    set(_cache_valid FALSE)
+    if(NOT B_FORCE AND NOT SPM_FORCE_REBUILD AND EXISTS "${B_DESTINATION}")
+        spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR _stamp_exists)
+        if(_stamp_exists)
+            if(_hash_algo)
+                file(${_hash_algo} "${B_DESTINATION}" _actual_hash)
+                string(TOLOWER "${_actual_hash}" _actual_hash)
+                if(_actual_hash STREQUAL _hash_value)
+                    set(_cache_valid TRUE)
+                else()
+                    spm_log_debug(
+                            "Cached '${B_DESTINATION}' no longer matches the excepted hash (found ${_hash_algo}=${_actual_hash}, expected ${_hash_algo}=${_hash_value}), re-downloading"
+                    )
+                endif()
+            else()
+                set(_cache_valid TRUE)
+            endif()
+        endif()
+    endif()
+
+    if(_cache_valid)
         return()
+    endif()
+
+    if(EXISTS "${_stamp_file}")
+        file(REMOVE "${_stamp_file}")
+    endif()
+    if(EXISTS "${B_DESTINATION}")
+        file(REMOVE "${B_DESTINATION}")
     endif()
 
     get_filename_component(_dest_dir "${B_DESTINATION}" DIRECTORY)
@@ -391,14 +427,14 @@ function(spm_download_file)
     endif()
 
     set(_download_args
-        "${B_URL}"
-        "${B_DESTINATION}"
-        STATUS
-        _status
-        LOG
-        _log
-        TLS_VERIFY
-        ON)
+            "${B_URL}"
+            "${B_DESTINATION}"
+            STATUS
+            _status
+            LOG
+            _log
+            TLS_VERIFY
+            ON)
     if(B_TIMEOUT)
         list(APPEND _download_args TIMEOUT "${B_TIMEOUT}")
     endif()
