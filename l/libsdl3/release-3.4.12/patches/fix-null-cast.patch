@@ -1,0 +1,13 @@
+diff --git a/include/SDL3/SDL_events.h b/include/SDL3/SDL_events.h
+index 312623e67..85f1713d3 100644
+--- a/include/SDL3/SDL_events.h
++++ b/include/SDL3/SDL_events.h
+@@ -1072,7 +1072,7 @@ typedef union SDL_Event
+ } SDL_Event;
+ 
+ /* Make sure we haven't broken binary compatibility */
+-SDL_COMPILE_TIME_ASSERT(SDL_Event, sizeof(SDL_Event) == sizeof((SDL_static_cast(SDL_Event *, NULL))->padding));
++SDL_COMPILE_TIME_ASSERT(SDL_Event, sizeof(SDL_Event) == sizeof((SDL_static_cast(SDL_Event *, (void*)0))->padding));
+ 
+ 
+ /* Function prototypes */

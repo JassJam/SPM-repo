@@ -145,7 +145,7 @@ function(_spm_build_and_import name version recipe_dir)
         IMPORT_NAME
         OUT_INSTALL_DIR
         OUT_BUILD_DIR)
-    set(multiValArgs PATCHES OPTIONS IMPORT_DEFINITIONS IMPORT_EXCLUDE)
+    set(multiValArgs OPTIONS IMPORT_DEFINITIONS IMPORT_EXCLUDE)
     cmake_parse_arguments(B "${options}" "${oneValArgs}" "${multiValArgs}" ${ARGN})
 
     _spm_lowercase_first_char("${name}" _letter)
