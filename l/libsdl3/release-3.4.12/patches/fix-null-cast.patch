@@ -1,0 +1,14 @@
+diff --git a/include/SDL3/SDL_stdinc.h b/include/SDL3/SDL_stdinc.h
+index b6403bea7..5046b6868 100644
+--- a/include/SDL3/SDL_stdinc.h
++++ b/include/SDL3/SDL_stdinc.h
+@@ -51,6 +51,9 @@
+ #include <stdarg.h>
+ #include <string.h>
+ #include <wchar.h>
++#ifdef __cplusplus
++#include <cstddef>
++#endif
+ 
+ /* Most everything except Visual Studio 2008 and earlier has stdint.h now */
+ #if defined(_MSC_VER) && (_MSC_VER < 1600)
