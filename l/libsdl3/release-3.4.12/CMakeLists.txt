@@ -5,6 +5,11 @@ spm_git_clone(
 	TAG release-3.4.12
 )
 
+spm_apply_patch(
+    PATCHES
+        patches/fix-null-cast.patch
+)
+
 set(_shared_build "OFF")
 if(SPM_BUILD_SHARED_LIBS)
 	set(_shared_build "ON")
