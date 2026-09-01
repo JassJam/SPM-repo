@@ -1,7 +1,20 @@
 include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
-if(NOT DIPP_USE_RESULT)
+if(NOT DEFINED ERROR_TYPE)
+	set(ERROR_TYPE "result")
+endif()
+
+set(deps "")
+if(ERROR_TYPE STREQUAL "result")
 	set(DIPP_USE_RESULT ON)
+	spm_requires(
+		NAME boost
+		VERSION 1.92.0
+		IMPORT_NAME dipp_deps
+		OPTIONS
+		"BOOST_INCLUDE_LIBRARIES=leaf"
+	)
+	list(APPEND deps "dipp_deps::boost")
 endif()
 
 spm_git_clone(
@@ -11,13 +24,15 @@ spm_git_clone(
 
 spm_cmake_configure(
 	OPTIONS
-	"-DDIPP_USE_RESULT=${DIPP_USE_RESULT}"
+	"-DERROR_TYPE=${ERROR_TYPE}"
+    DEPENDENCIES ${deps}
 )
 spm_cmake_build()
 
 spm_create_target(
     NAME dipp
 	OUT_TARGET_NAME _target_name
+    DEPENDENCIES ${deps}
 )
 
 if(DIPP_USE_RESULT)

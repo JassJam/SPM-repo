@@ -14,7 +14,7 @@ spm_extract_archive(
 )
 
 set(_options "")
-if(NOT BOOST_INSTALL_LAYOUT)
+if(NOT DEFINED BOOST_INSTALL_LAYOUT)
     list(APPEND _options "-DBOOST_INSTALL_LAYOUT=system")
 endif()
 

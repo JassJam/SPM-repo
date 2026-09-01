@@ -10,7 +10,7 @@ spm_apply_patch(
 	patches/u128-x86-backport.patch
 )
 
-if(NOT FMT_UNICODE)
+if(NOT DEFINED FMT_UNICODE)
 	set(FMT_UNICODE ON)
 endif()
 
