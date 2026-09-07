@@ -135,6 +135,85 @@ function(_spm_get_build_hash OUT_HASH)
         PARENT_SCOPE)
 endfunction()
 
+function(_spm_warning_as_error_flags out_var)
+    set(${out_var}
+        "-Werror" "-Werror=.*"
+        "-pedantic-errors"
+        "-Wfatal-errors"
+        "-Werror-implicit-function-declaration"
+        "/WX" "/we[0-9]+"
+        "/sdl"
+        "-Wl,--fatal-warnings"
+        "-Wl,-fatal_warnings"
+        PARENT_SCOPE)
+endfunction()
+
+function(_spm_write_werror_wrapper out_path)
+    set(_wrapper "${CMAKE_BINARY_DIR}/_spm/spm-strip-werror.cmake")
+    if(NOT EXISTS "${_wrapper}")
+        _spm_warning_as_error_flags(_flags)
+
+        set(_match_exprs "")
+        foreach(_f ${_flags})
+            list(APPEND _match_exprs "_spm_arg MATCHES \"^${_f}$\"")
+        endforeach()
+        string(REPLACE ";" "\n       OR " _match_block "${_match_exprs}")
+
+        file(WRITE "${_wrapper}" "\
+set(_spm_compiler \"\${CMAKE_ARGV4}\")
+set(_spm_filtered \"\")
+math(EXPR _spm_last \"\${CMAKE_ARGC} - 1\")
+foreach(_spm_i RANGE 5 \${_spm_last})
+    set(_spm_arg \"\${CMAKE_ARGV\${_spm_i}}\")
+    if(${_match_block})
+        continue()
+    endif()
+    list(APPEND _spm_filtered \"\${_spm_arg}\")
+endforeach()
+execute_process(COMMAND \"\${_spm_compiler}\" \${_spm_filtered} RESULT_VARIABLE _spm_rc)
+if(NOT _spm_rc EQUAL 0)
+    message(FATAL_ERROR \"\")
+endif()
+")
+    endif()
+    set(${out_path} "${_wrapper}" PARENT_SCOPE)
+endfunction()
+
+function(_spm_write_input_script)
+    set(oneValArgs PATH BUILD_DIR BUILD_TYPE)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_PATH OR NOT B_BUILD_DIR OR NOT B_BUILD_TYPE)
+        spm_log_fatal("_spm_write_input_script() requires PATH, BUILD_DIR and BUILD_TYPE")
+    endif()
+
+    _spm_write_werror_wrapper(_werror_wrapper)
+
+    file(
+        WRITE "${B_PATH}"
+        "\
+set(CMAKE_BUILD_TYPE \"${B_BUILD_TYPE}\" CACHE INTERNAL \"\")
+set(CMAKE_PROJECT_INCLUDE \"${B_BUILD_DIR}/spm-recipe.cmake\" CACHE INTERNAL \"\")
+set(BUILD_TESTING OFF CACHE INTERNAL \"\")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE INTERNAL \"\")
+set(CMAKE_OBJECT_PATH_MAX 1024 CACHE INTERNAL \"\")
+
+set(CMAKE_COMPILE_WARNING_AS_ERROR OFF CACHE INTERNAL \"\" FORCE)
+set(CMAKE_C_COMPILER_LAUNCHER \"${CMAKE_COMMAND};-P;${_werror_wrapper};--\" CACHE INTERNAL \"\" FORCE)
+set(CMAKE_CXX_COMPILER_LAUNCHER \"${CMAKE_COMMAND};-P;${_werror_wrapper};--\" CACHE INTERNAL \"\" FORCE)
+
+set(CMAKE_UNITY_BUILD OFF CACHE INTERNAL \"\" FORCE)
+set(CMAKE_C_CLANG_TIDY \"\" CACHE INTERNAL \"\" FORCE)
+set(CMAKE_CXX_CLANG_TIDY \"\" CACHE INTERNAL \"\" FORCE)
+set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE \"\" CACHE INTERNAL \"\" FORCE)
+set(CMAKE_LINK_WHAT_YOU_USE OFF CACHE INTERNAL \"\" FORCE)
+
+string(REGEX REPLACE \"-Wl,--fatal-warnings|-Wl,-fatal_warnings|/WX\" \"\" CMAKE_EXE_LINKER_FLAGS \"${CMAKE_EXE_LINKER_FLAGS}\")
+string(REGEX REPLACE \"-Wl,--fatal-warnings|-Wl,-fatal_warnings|/WX\" \"\" CMAKE_SHARED_LINKER_FLAGS \"${CMAKE_SHARED_LINKER_FLAGS}\")
+")
+    spm_log_debug("Wrote input script '${B_PATH}'")
+endfunction()
+
 function(_spm_build_and_import name version recipe_dir)
     set(options FORCE SHARED)
     set(oneValArgs
@@ -197,15 +276,11 @@ function(_spm_build_and_import name version recipe_dir)
 
     set(_input_script_file_name "spm-input.cmake")
     set(_input_script "${_build_dir}/${_input_script_file_name}")
-    file(
-        WRITE "${_input_script}"
-        "\
-set(CMAKE_BUILD_TYPE \"${_pkg_build_type}\" CACHE INTERNAL \"\")
-set(CMAKE_PROJECT_INCLUDE \"${_build_dir}/spm-recipe.cmake\" CACHE INTERNAL \"\")
-set(BUILD_TESTING OFF CACHE INTERNAL \"\")
-set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE INTERNAL \"\")
-set(CMAKE_OBJECT_PATH_MAX 1024 CACHE INTERNAL \"\")
-")
+    _spm_write_input_script(
+        PATH "${_input_script}"
+        BUILD_DIR "${_build_dir}"
+        BUILD_TYPE "${_pkg_build_type}")
+
     block()
     set(SPM_IMPORT_NAME ${B_IMPORT_NAME})
     set(SPM_BUILD_TYPE ${_pkg_build_type})
