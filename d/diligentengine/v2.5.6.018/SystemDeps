@@ -1,0 +1,17 @@
+apt:libx11-dev
+apt:libxext-dev
+apt:libxrandr-dev
+apt:libxcursor-dev
+apt:libxfixes-dev
+apt:libxi-dev
+apt:libxss-dev
+apt:libxtst-dev
+apt:libxkbcommon-dev
+apt:libwayland-dev
+apt:libdecor-0-dev
+apt:libncurses-dev
+apt:libopengl-dev
+apt:libglx-dev
+apt:libegl1-mesa-dev
+apt:libxinerama-dev
+apt-noarch:wayland-protocols
