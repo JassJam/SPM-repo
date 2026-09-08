@@ -20,8 +20,6 @@ spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
 if(NOT ${exists})
 
 	file(GLOB_RECURSE FILE_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/install/include/**")
-	message("FILE_PATHS: ${FILE_PATHS}")
-
 	foreach(FILE_PATH ${FILE_PATHS})
 		file(READ "${FILE_PATH}" FILE_CONTENTS)
 
