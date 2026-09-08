@@ -172,7 +172,9 @@ function(spm_requires)
     endif()
 
     if(R_OUT_INSTALL_DIR)
-        set(${R_OUT_INSTALL_DIR} "${_dep_install_dir}" PARENT_SCOPE)
+        set(${R_OUT_INSTALL_DIR}
+            "${_dep_install_dir}"
+            PARENT_SCOPE)
     endif()
 
     set_property(GLOBAL PROPERTY SPM_DEP_INSTALL_DIR_NAME_${_name} "${_dep_install_dir}")
@@ -391,7 +393,9 @@ function(spm_download_file)
     set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-download-${_stamp_key}")
 
     set(_cache_valid FALSE)
-    if(NOT B_FORCE AND NOT SPM_FORCE_REBUILD AND EXISTS "${B_DESTINATION}")
+    if(NOT B_FORCE
+       AND NOT SPM_FORCE_REBUILD
+       AND EXISTS "${B_DESTINATION}")
         spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR _stamp_exists)
         if(_stamp_exists)
             if(_hash_algo)
@@ -401,7 +405,7 @@ function(spm_download_file)
                     set(_cache_valid TRUE)
                 else()
                     spm_log_debug(
-                            "Cached '${B_DESTINATION}' no longer matches the excepted hash (found ${_hash_algo}=${_actual_hash}, expected ${_hash_algo}=${_hash_value}), re-downloading"
+                        "Cached '${B_DESTINATION}' no longer matches the excepted hash (found ${_hash_algo}=${_actual_hash}, expected ${_hash_algo}=${_hash_value}), re-downloading"
                     )
                 endif()
             else()
@@ -427,14 +431,14 @@ function(spm_download_file)
     endif()
 
     set(_download_args
-            "${B_URL}"
-            "${B_DESTINATION}"
-            STATUS
-            _status
-            LOG
-            _log
-            TLS_VERIFY
-            ON)
+        "${B_URL}"
+        "${B_DESTINATION}"
+        STATUS
+        _status
+        LOG
+        _log
+        TLS_VERIFY
+        ON)
     if(B_TIMEOUT)
         list(APPEND _download_args TIMEOUT "${B_TIMEOUT}")
     endif()
