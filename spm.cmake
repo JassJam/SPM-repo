@@ -137,13 +137,11 @@ endfunction()
 
 function(_spm_warning_as_error_flags out_var)
     set(${out_var}
-        "-Werror"
-        "-Werror=.*"
+        "-Werror" "-Werror=.*"
         "-pedantic-errors"
         "-Wfatal-errors"
         "-Werror-implicit-function-declaration"
-        "/WX"
-        "/we[0-9]+"
+        "/WX" "/we[0-9]+"
         "/sdl"
         "-Wl,--fatal-warnings"
         "-Wl,-fatal_warnings"
@@ -161,9 +159,7 @@ function(_spm_write_werror_wrapper out_path)
         endforeach()
         string(REPLACE ";" "\n       OR " _match_block "${_match_exprs}")
 
-        file(
-            WRITE "${_wrapper}"
-            "\
+        file(WRITE "${_wrapper}" "\
 set(_spm_compiler \"\${CMAKE_ARGV4}\")
 set(_spm_filtered \"\")
 math(EXPR _spm_last \"\${CMAKE_ARGC} - 1\")
@@ -180,18 +176,14 @@ if(NOT _spm_rc EQUAL 0)
 endif()
 ")
     endif()
-    set(${out_path}
-        "${_wrapper}"
-        PARENT_SCOPE)
+    set(${out_path} "${_wrapper}" PARENT_SCOPE)
 endfunction()
 
 function(_spm_write_input_script)
     set(oneValArgs PATH BUILD_DIR BUILD_TYPE)
     cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
 
-    if(NOT B_PATH
-       OR NOT B_BUILD_DIR
-       OR NOT B_BUILD_TYPE)
+    if(NOT B_PATH OR NOT B_BUILD_DIR OR NOT B_BUILD_TYPE)
         spm_log_fatal("_spm_write_input_script() requires PATH, BUILD_DIR and BUILD_TYPE")
     endif()
 
@@ -284,7 +276,10 @@ function(_spm_build_and_import name version recipe_dir)
 
     set(_input_script_file_name "spm-input.cmake")
     set(_input_script "${_build_dir}/${_input_script_file_name}")
-    _spm_write_input_script(PATH "${_input_script}" BUILD_DIR "${_build_dir}" BUILD_TYPE "${_pkg_build_type}")
+    _spm_write_input_script(
+        PATH "${_input_script}"
+        BUILD_DIR "${_build_dir}"
+        BUILD_TYPE "${_pkg_build_type}")
 
     block()
     set(SPM_IMPORT_NAME ${B_IMPORT_NAME})
