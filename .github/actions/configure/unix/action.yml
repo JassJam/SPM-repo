@@ -20,7 +20,11 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y g++-14 clang-18 gcc-multilib g++-multilib pkg-config
+        sudo apt-get install -y g++-14 clang-18 libc++-18-dev libc++abi-18-dev gcc-multilib g++-multilib pkg-config
+
+        if [[ "${{ inputs.arch }}" == *x86* && "${{ inputs.arch }}" != *x64* ]]; then
+          sudo apt-get install -y libc++-18-dev:i386 libc++abi-18-dev:i386
+        fi
 
     - name: Install recipe system dependencies
       shell: bash
