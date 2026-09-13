@@ -23,6 +23,7 @@ spm_apply_patch(
         patches/glslang-cstdint.patch
         patches/no-clang-format.patch
         patches/export-defines.patch
+        patches/string-cast.patch
 )
 
 set(_deps "")
