@@ -161,7 +161,9 @@ function(_spm_write_werror_wrapper out_path)
         endforeach()
         string(REPLACE ";" "\n       OR " _match_block "${_match_exprs}")
 
-        file(WRITE "${_wrapper}" "\
+        file(
+            WRITE "${_wrapper}"
+            "\
 set(_spm_compiler \"\${CMAKE_ARGV4}\")
 set(_spm_filtered \"\")
 math(EXPR _spm_last \"\${CMAKE_ARGC} - 1\")
@@ -178,7 +180,9 @@ if(NOT _spm_rc EQUAL 0)
 endif()
 ")
     endif()
-    set(${out_path} "${_wrapper}" PARENT_SCOPE)
+    set(${out_path}
+        "${_wrapper}"
+        PARENT_SCOPE)
 endfunction()
 
 # _spm_write_input_script(
