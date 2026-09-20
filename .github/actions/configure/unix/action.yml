@@ -9,22 +9,11 @@ runs:
   steps:
     - uses: actions/checkout@v4
 
-    - name: Enable i386 architecture
-      if: contains(inputs.arch, 'x86') && !contains(inputs.arch, 'x64')
-      shell: bash
-      run: |
-        sudo dpkg --add-architecture i386
-        echo "Enabled i386 arch for ${{ inputs.arch }}"
-
     - name: Install dependencies
       shell: bash
       run: |
         sudo apt-get update
         sudo apt-get install -y g++-14 clang-18 libc++-18-dev libc++abi-18-dev gcc-multilib g++-multilib pkg-config
-
-        if [[ "${{ inputs.arch }}" == *x86* && "${{ inputs.arch }}" != *x64* ]]; then
-          sudo apt-get install -y libc++-18-dev:i386 libc++abi-18-dev:i386
-        fi
 
     - name: Install recipe system dependencies
       shell: bash
