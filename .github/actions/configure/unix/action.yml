@@ -13,7 +13,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y g++-14 clang-18 libc++-18-dev libc++abi-18-dev gcc-multilib g++-multilib pkg-config
+        sudo apt-get install -y g++-14 clang-18 libc++-18-dev libc++abi-18-dev gcc-multilib g++-multilib pkg-config meson
 
     - name: Install recipe system dependencies
       shell: bash
