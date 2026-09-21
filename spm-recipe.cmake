@@ -358,6 +358,10 @@ function(spm_meson_configure)
         list(APPEND _args --reconfigure)
     endif()
 
+    if(MSVC)
+        list(APPEND _args --vsenv)
+    endif()
+
     spm_execute_process(
         COMMAND
         ${_env_cmd}
