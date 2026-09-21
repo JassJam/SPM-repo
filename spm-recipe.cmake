@@ -240,6 +240,33 @@ function(_spm_resolve_dependency_prefixes deps out_var)
         PARENT_SCOPE)
 endfunction()
 
+macro(_spm_meson_msvc_env_push)
+    set(_spm_meson_saved_path "$ENV{PATH}")
+    set(_spm_meson_use_vsenv FALSE)
+    if(MSVC)
+        set(_spm_meson_cl "")
+        if(CMAKE_C_COMPILER)
+            set(_spm_meson_cl "${CMAKE_C_COMPILER}")
+        elseif(CMAKE_CXX_COMPILER)
+            set(_spm_meson_cl "${CMAKE_CXX_COMPILER}")
+        endif()
+        if(DEFINED ENV{VSINSTALLDIR} AND _spm_meson_cl)
+            get_filename_component(_spm_meson_msvc_bin "${_spm_meson_cl}" DIRECTORY)
+            file(TO_NATIVE_PATH "${_spm_meson_msvc_bin}" _spm_meson_msvc_bin)
+            set(ENV{PATH} "${_spm_meson_msvc_bin};$ENV{PATH}")
+            spm_log_debug("Prepended '${_spm_meson_msvc_bin}' to PATH for meson")
+        else()
+            set(_spm_meson_use_vsenv TRUE)
+        endif()
+    endif()
+endmacro()
+
+macro(_spm_meson_msvc_env_pop)
+    set(ENV{PATH} "${_spm_meson_saved_path}")
+endmacro()
+
+# MESON
+
 # Configure a meson target
 #
 # spm_meson_configure(
@@ -274,7 +301,6 @@ function(spm_meson_configure)
         set(B_INSTALL_DIR install)
     endif()
 
-    # meson rejects a relative --prefix
     if(NOT IS_ABSOLUTE "${B_INSTALL_DIR}")
         set(B_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${B_INSTALL_DIR}")
     endif()
@@ -354,12 +380,13 @@ function(spm_meson_configure)
         endif()
     endif()
 
-    if(EXISTS "${_build_abs}/meson-private/coredata.dat")
-        list(APPEND _args --reconfigure)
+    _spm_meson_msvc_env_push()
+    if(_spm_meson_use_vsenv)
+        list(APPEND _args --vsenv)
     endif()
 
-    if(MSVC)
-        list(APPEND _args --vsenv)
+    if(EXISTS "${_build_abs}/meson-private/coredata.dat")
+        list(APPEND _args --reconfigure)
     endif()
 
     spm_execute_process(
@@ -379,6 +406,7 @@ function(spm_meson_configure)
         _cfg_output
         ERROR_VARIABLE
         _cfg_output)
+    _spm_meson_msvc_env_pop()
 
     if(NOT _cfg_result EQUAL 0)
         spm_log_fatal("Configure failed:\n${_cfg_output}")
@@ -401,10 +429,17 @@ function(spm_meson_build)
         set(B_BUILD_DIR build)
     endif()
 
+    _spm_meson_msvc_env_push()
+    set(_vsenv_arg "")
+    if(_spm_meson_use_vsenv)
+        set(_vsenv_arg --vsenv)
+    endif()
+
     spm_execute_process(
         COMMAND
         ${MESON_EXECUTABLE}
         compile
+        ${_vsenv_arg}
         -C
         "${B_BUILD_DIR}"
         -j
@@ -439,6 +474,7 @@ function(spm_meson_build)
     if(NOT _install_result EQUAL 0)
         spm_log_fatal("Install failed:\n${_install_output}")
     endif()
+    _spm_meson_msvc_env_pop()
 endfunction()
 
 # GIT
