@@ -37,6 +37,13 @@ set(SPM_BUILD_SHARED_LIBS
 #
 
 find_program(GIT_EXECUTABLE NAMES git)
+find_program(MESON_EXECUTABLE NAMES meson)
+
+macro(_spm_requires_meson)
+    if(NOT MESON_EXECUTABLE)
+        spm_log_fatal("no meson executable was found")
+    endif()
+endmacro()
 
 macro(_spm_requires_git)
     if(NOT GIT_EXECUTABLE)
@@ -210,6 +217,228 @@ function(_spm_resolve_dependency_targets deps out_var)
         PARENT_SCOPE)
 endfunction()
 
+#
+
+function(_spm_resolve_dependency_prefixes deps out_var)
+    get_property(
+        _declared
+        DIRECTORY
+        PROPERTY SPM_RECIPE_DEPENDENCIES)
+    set(_prefixes "")
+    foreach(_dep ${deps})
+        if(NOT _dep IN_LIST _declared)
+            spm_log_fatal("DEPENDENCIES entry '${_dep}' was not declared via spm_requires() in this recipe")
+        endif()
+        get_property(_dep_dir GLOBAL PROPERTY SPM_DEP_INSTALL_DIR_NAME_${_dep})
+        if(NOT _dep_dir)
+            spm_log_fatal("No install directory recorded for dependency '${_dep}'")
+        endif()
+        list(APPEND _prefixes "${_dep_dir}")
+    endforeach()
+    set(${out_var}
+        "${_prefixes}"
+        PARENT_SCOPE)
+endfunction()
+
+# Configure a meson target
+#
+# spm_meson_configure(
+#   [SOURCE_DIR source]
+#   [BUILD_DIR build]
+#   [INSTALL_DIR install]
+#   [OPTIONS ...]
+#   [DEPENDENCIES ...]
+#   [NATIVE_FILE <file>...]
+#   [CROSS_FILE <file>...]
+# )
+function(spm_meson_configure)
+    _spm_requires_meson()
+
+    set(oneValArgs SOURCE_DIR BUILD_DIR INSTALL_DIR)
+    set(multiValArgs OPTIONS DEPENDENCIES NATIVE_FILE CROSS_FILE)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(B_UNPARSED_ARGUMENTS)
+        spm_log_fatal("spm_meson_configure() got unrecognized arguments: ${B_UNPARSED_ARGUMENTS}")
+    endif()
+
+    if(NOT B_SOURCE_DIR)
+        set(B_SOURCE_DIR source)
+    endif()
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    if(NOT B_INSTALL_DIR)
+        set(B_INSTALL_DIR install)
+    endif()
+
+    # meson rejects a relative --prefix
+    if(NOT IS_ABSOLUTE "${B_INSTALL_DIR}")
+        set(B_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${B_INSTALL_DIR}")
+    endif()
+
+    if(IS_ABSOLUTE "${B_BUILD_DIR}")
+        set(_build_abs "${B_BUILD_DIR}")
+    else()
+        set(_build_abs "${CMAKE_CURRENT_SOURCE_DIR}/${B_BUILD_DIR}")
+    endif()
+
+    set(_args --prefix "${B_INSTALL_DIR}" --libdir lib)
+
+    # SPM_BUILD_TYPE uses CMake naming, map it onto meson's --buildtype.
+    if(SPM_BUILD_TYPE)
+        string(TOLOWER "${SPM_BUILD_TYPE}" _bt)
+        if(_bt STREQUAL "debug")
+            set(_meson_bt debug)
+        elseif(_bt STREQUAL "release")
+            set(_meson_bt release)
+        elseif(_bt STREQUAL "relwithdebinfo")
+            set(_meson_bt debugoptimized)
+        elseif(_bt STREQUAL "minsizerel")
+            set(_meson_bt minsize)
+        else()
+            spm_log_fatal("SPM_BUILD_TYPE '${SPM_BUILD_TYPE}' has no meson buildtype equivalent")
+        endif()
+        list(APPEND _args --buildtype "${_meson_bt}")
+    endif()
+
+    if(NOT SPM_BUILD_SHARED_LIBS STREQUAL "")
+        if(SPM_BUILD_SHARED_LIBS)
+            list(APPEND _args --default-library shared)
+        else()
+            list(APPEND _args --default-library static)
+        endif()
+    endif()
+
+    _spm_resolve_dependency_prefixes("${B_DEPENDENCIES}" _dep_prefixes)
+
+    set(_pc_paths "")
+    foreach(_prefix ${_dep_prefixes})
+        foreach(_sub lib/pkgconfig lib64/pkgconfig share/pkgconfig)
+            if(IS_DIRECTORY "${_prefix}/${_sub}")
+                list(APPEND _pc_paths "${_prefix}/${_sub}")
+            endif()
+        endforeach()
+    endforeach()
+    if(_pc_paths)
+        list(JOIN _pc_paths "," _pc_paths_str)
+        list(APPEND _args "-Dpkg_config_path=${_pc_paths_str}")
+    endif()
+
+    set(_cmake_paths ${CMAKE_PREFIX_PATH} ${_dep_prefixes})
+    if(_cmake_paths)
+        list(JOIN _cmake_paths "," _cmake_paths_str)
+        list(APPEND _args "-Dcmake_prefix_path=${_cmake_paths_str}")
+    endif()
+
+    foreach(_file ${B_NATIVE_FILE})
+        list(APPEND _args --native-file "${_file}")
+    endforeach()
+    foreach(_file ${B_CROSS_FILE})
+        list(APPEND _args --cross-file "${_file}")
+    endforeach()
+
+    set(_env_cmd "")
+    if(NOT B_CROSS_FILE)
+        set(_env_vars "")
+        if(CMAKE_C_COMPILER)
+            list(APPEND _env_vars "CC=${CMAKE_C_COMPILER}")
+        endif()
+        if(CMAKE_CXX_COMPILER)
+            list(APPEND _env_vars "CXX=${CMAKE_CXX_COMPILER}")
+        endif()
+        if(_env_vars)
+            set(_env_cmd ${CMAKE_COMMAND} -E env ${_env_vars})
+        endif()
+    endif()
+
+    if(EXISTS "${_build_abs}/meson-private/coredata.dat")
+        list(APPEND _args --reconfigure)
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${_env_cmd}
+        ${MESON_EXECUTABLE}
+        setup
+        ${_args}
+        ${B_OPTIONS}
+        "${B_BUILD_DIR}"
+        "${B_SOURCE_DIR}"
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _cfg_result
+        OUTPUT_VARIABLE
+        _cfg_output
+        ERROR_VARIABLE
+        _cfg_output)
+
+    if(NOT _cfg_result EQUAL 0)
+        spm_log_fatal("Configure failed:\n${_cfg_output}")
+    else()
+        spm_log_debug("Configure succeeded:\n${_cfg_output}")
+    endif()
+endfunction()
+
+function(spm_meson_build)
+    _spm_requires_meson()
+
+    set(oneValArgs BUILD_DIR)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(B_UNPARSED_ARGUMENTS)
+        spm_log_fatal("spm_meson_build() got unrecognized arguments: ${B_UNPARSED_ARGUMENTS}")
+    endif()
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${MESON_EXECUTABLE}
+        compile
+        -C
+        "${B_BUILD_DIR}"
+        -j
+        ${SPM_PARALLEL_JOBS}
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _build_result
+        OUTPUT_VARIABLE
+        _build_output
+        ERROR_VARIABLE
+        _build_output)
+    if(NOT _build_result EQUAL 0)
+        spm_log_fatal("Build failed:\n${_build_output}")
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${MESON_EXECUTABLE}
+        install
+        -C
+        "${B_BUILD_DIR}"
+        --no-rebuild
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _install_result
+        OUTPUT_VARIABLE
+        _install_output
+        ERROR_VARIABLE
+        _install_output)
+    if(NOT _install_result EQUAL 0)
+        spm_log_fatal("Install failed:\n${_install_output}")
+    endif()
+endfunction()
+
+# GIT
+
 # Fetches from a git source
 # spm_git_clone(
 #   URL <url>
@@ -343,6 +572,146 @@ function(spm_git_clone)
 
     spm_write_stamp_file(FILE "${_stamp_file}")
 endfunction()
+
+# Configure a cmake target
+# spm_cmake_configure(
+#   [SOURCE_DIR source]
+#   [BUILD_DIR build]
+#   [INSTALL_DIR install]
+#   [OPTIONS ...]
+#   [DEPENDENCIES ...]
+# )
+function(spm_cmake_configure)
+    _spm_requires_git()
+
+    set(oneValArgs SOURCE_DIR BUILD_DIR INSTALL_DIR)
+    set(multiValArgs OPTIONS DEPENDENCIES)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(NOT B_SOURCE_DIR)
+        set(B_SOURCE_DIR source)
+    endif()
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    if(NOT B_INSTALL_DIR)
+        set(B_INSTALL_DIR install)
+    endif()
+
+    set(_dep_prefix_paths "")
+    if(B_DEPENDENCIES)
+        get_property(
+            _declared
+            DIRECTORY
+            PROPERTY SPM_RECIPE_DEPENDENCIES)
+        foreach(_dep ${B_DEPENDENCIES})
+            if(NOT _dep IN_LIST _declared)
+                spm_log_fatal("DEPENDENCIES entry '${_dep}' was not declared via spm_requires() in this recipe")
+            endif()
+            get_property(_dep_dir GLOBAL PROPERTY SPM_DEP_INSTALL_DIR_NAME_${_dep})
+            if(NOT _dep_dir)
+                spm_log_fatal("No install directory recorded for dependency '${_dep}'")
+            endif()
+            list(APPEND _dep_prefix_paths "${_dep_dir}")
+        endforeach()
+    endif()
+    if(CMAKE_PREFIX_PATH)
+        list(PREPEND _dep_prefix_paths ${CMAKE_PREFIX_PATH})
+    endif()
+
+    set(_prefix_path_arg "")
+    if(_dep_prefix_paths)
+        set(_prefix_cache_file "${CMAKE_CURRENT_SOURCE_DIR}/spm-prefix-path.cmake")
+        file(WRITE "${_prefix_cache_file}" "set(CMAKE_PREFIX_PATH \"")
+        set(_first TRUE)
+        foreach(_p ${_dep_prefix_paths})
+            if(NOT _first)
+                file(APPEND "${_prefix_cache_file}" ";")
+            endif()
+            file(APPEND "${_prefix_cache_file}" "${_p}")
+            set(_first FALSE)
+        endforeach()
+        file(APPEND "${_prefix_cache_file}" "\" CACHE STRING \"\" FORCE)\n")
+        set(_prefix_path_arg -C "${_prefix_cache_file}")
+    endif()
+
+    set(_args "")
+    list(APPEND _args "-DCMAKE_INSTALL_PREFIX=${B_INSTALL_DIR}")
+
+    spm_execute_process(
+        COMMAND
+        ${CMAKE_COMMAND}
+        -S
+        ${B_SOURCE_DIR}
+        -B
+        ${B_BUILD_DIR}
+        -G
+        "${CMAKE_GENERATOR}"
+        -C
+        "spm-input.cmake"
+        ${_args}
+        ${_prefix_path_arg}
+        ${B_OPTIONS}
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _cfg_result
+        OUTPUT_VARIABLE
+        _cfg_output
+        ERROR_VARIABLE
+        _cfg_output)
+
+    if(NOT _cfg_result EQUAL 0)
+        spm_log_fatal("Configure failed:\n${_cfg_output}")
+    else()
+        spm_log_debug("Configure succeeded:\n${_cfg_output}")
+    endif()
+
+endfunction()
+
+# Build a configured cmake target
+# spm_cmake_build(
+#   [BUILD_DIR build]
+# )
+function(spm_cmake_build)
+    _spm_requires_git()
+
+    set(oneValArgs BUILD_DIR)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    set(_build_target_args)
+
+    spm_execute_process(
+        COMMAND
+        ${CMAKE_COMMAND}
+        --build
+        ${B_BUILD_DIR}
+        --config
+        ${SPM_BUILD_TYPE}
+        --parallel
+        ${SPM_PARALLEL_JOBS}
+        --target
+        install
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _build_result
+        OUTPUT_VARIABLE
+        _build_output
+        ERROR_VARIABLE
+        _build_output)
+    if(NOT _build_result EQUAL 0)
+        spm_log_fatal("Build failed target:\n${_build_output}")
+    endif()
+endfunction()
+
+# DOWNLOAD
 
 # Downloads a file, with header/auth support, hash verification, and retry.
 #
@@ -569,6 +938,8 @@ function(spm_extract_archive)
     endif()
 endfunction()
 
+# PATCHING
+
 # Patches source
 # spm_apply_patch(
 #   PATCHES ...
@@ -621,144 +992,6 @@ function(spm_apply_patch)
 
         spm_write_stamp_file(FILE "${_stamp_file}")
     endforeach()
-endfunction()
-
-# Configure a cmake target
-# spm_cmake_configure(
-#   [SOURCE_DIR source]
-#   [BUILD_DIR build]
-#   [INSTALL_DIR install]
-#   [OPTIONS ...]
-#   [DEPENDENCIES ...]
-# )
-function(spm_cmake_configure)
-    _spm_requires_git()
-
-    set(oneValArgs SOURCE_DIR BUILD_DIR INSTALL_DIR)
-    set(multiValArgs OPTIONS DEPENDENCIES)
-    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
-
-    if(NOT B_SOURCE_DIR)
-        set(B_SOURCE_DIR source)
-    endif()
-
-    if(NOT B_BUILD_DIR)
-        set(B_BUILD_DIR build)
-    endif()
-
-    if(NOT B_INSTALL_DIR)
-        set(B_INSTALL_DIR install)
-    endif()
-
-    set(_dep_prefix_paths "")
-    if(B_DEPENDENCIES)
-        get_property(
-            _declared
-            DIRECTORY
-            PROPERTY SPM_RECIPE_DEPENDENCIES)
-        foreach(_dep ${B_DEPENDENCIES})
-            if(NOT _dep IN_LIST _declared)
-                spm_log_fatal("DEPENDENCIES entry '${_dep}' was not declared via spm_requires() in this recipe")
-            endif()
-            get_property(_dep_dir GLOBAL PROPERTY SPM_DEP_INSTALL_DIR_NAME_${_dep})
-            if(NOT _dep_dir)
-                spm_log_fatal("No install directory recorded for dependency '${_dep}'")
-            endif()
-            list(APPEND _dep_prefix_paths "${_dep_dir}")
-        endforeach()
-    endif()
-    if(CMAKE_PREFIX_PATH)
-        list(PREPEND _dep_prefix_paths ${CMAKE_PREFIX_PATH})
-    endif()
-
-    set(_prefix_path_arg "")
-    if(_dep_prefix_paths)
-        set(_prefix_cache_file "${CMAKE_CURRENT_SOURCE_DIR}/spm-prefix-path.cmake")
-        file(WRITE "${_prefix_cache_file}" "set(CMAKE_PREFIX_PATH \"")
-        set(_first TRUE)
-        foreach(_p ${_dep_prefix_paths})
-            if(NOT _first)
-                file(APPEND "${_prefix_cache_file}" ";")
-            endif()
-            file(APPEND "${_prefix_cache_file}" "${_p}")
-            set(_first FALSE)
-        endforeach()
-        file(APPEND "${_prefix_cache_file}" "\" CACHE STRING \"\" FORCE)\n")
-        set(_prefix_path_arg -C "${_prefix_cache_file}")
-    endif()
-
-    set(_args "")
-    list(APPEND _args "-DCMAKE_INSTALL_PREFIX=${B_INSTALL_DIR}")
-
-    spm_execute_process(
-        COMMAND
-        ${CMAKE_COMMAND}
-        -S
-        ${B_SOURCE_DIR}
-        -B
-        ${B_BUILD_DIR}
-        -G
-        "${CMAKE_GENERATOR}"
-        -C
-        "spm-input.cmake"
-        ${_args}
-        ${_prefix_path_arg}
-        ${B_OPTIONS}
-        WORKING_DIRECTORY
-        "${CMAKE_CURRENT_SOURCE_DIR}"
-        RESULT_VARIABLE
-        _cfg_result
-        OUTPUT_VARIABLE
-        _cfg_output
-        ERROR_VARIABLE
-        _cfg_output)
-
-    if(NOT _cfg_result EQUAL 0)
-        spm_log_fatal("Configure failed:\n${_cfg_output}")
-    else()
-        spm_log_debug("Configure succeeded:\n${_cfg_output}")
-    endif()
-
-endfunction()
-
-# Build a configured cmake target
-# spm_cmake_build(
-#   [BUILD_DIR build]
-# )
-function(spm_cmake_build)
-    _spm_requires_git()
-
-    set(oneValArgs BUILD_DIR)
-    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
-
-    if(NOT B_BUILD_DIR)
-        set(B_BUILD_DIR build)
-    endif()
-
-    set(_build_target_args)
-
-    spm_execute_process(
-        COMMAND
-        ${CMAKE_COMMAND}
-        --build
-        ${B_BUILD_DIR}
-        --config
-        ${SPM_BUILD_TYPE}
-        --parallel
-        ${SPM_PARALLEL_JOBS}
-        --target
-        install
-        WORKING_DIRECTORY
-        "${CMAKE_CURRENT_SOURCE_DIR}"
-        RESULT_VARIABLE
-        _build_result
-        OUTPUT_VARIABLE
-        _build_output
-        ERROR_VARIABLE
-        _build_output)
-    if(NOT _build_result EQUAL 0)
-        spm_log_fatal("Build failed target:\n${_build_output}")
-    endif()
 endfunction()
 
 #
