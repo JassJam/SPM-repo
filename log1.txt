@@ -1,0 +1,17 @@
+-- [SPM]: Entering (depth 1), saving directory/registry/registry_ref/headers.
+-- [SPM]: Using recipe for 'openldap@2.7.1' directly from local registry /home/jam/projects/SPM-repo/.github/../o/openldap/2.7.1.
+-- [SPM]: Building & importing 'openldap@2.7.1' from /home/jam/projects/SPM-repo/.github/../o/openldap/2.7.1.
+-- [SPM]: OUT_INSTALL_DIR: /home/jam/projects/SPM-repo/build/_spm/openldap/2.7.1/319ed71d8e17b54b083cb6d062e9dc3e3d53a8b1bbdf1a605c4a38a73608a6d8/install.
+-- [SPM]: Wrote input script '/home/jam/projects/SPM-repo/build/_spm/openldap/2.7.1/319ed71d8e17b54b083cb6d062e9dc3e3d53a8b1bbdf1a605c4a38a73608a6d8/spm-input.cmake'.
+-- [SPM]: Configuring 'openldap@2.7.1' (319ed71d8e17b54b083cb6d062e9dc3e3d53a8b1bbdf1a605c4a38a73608a6d8).
+-- [SPM]: Stamp file /home/jam/projects/SPM-repo/build/_spm/openldap/2.7.1/319ed71d8e17b54b083cb6d062e9dc3e3d53a8b1bbdf1a605c4a38a73608a6d8/.spm-gitclone-source exists, ignoring.
+-- [SPM]: Stamp file /home/jam/projects/SPM-repo/build/_spm/openldap/2.7.1/319ed71d8e17b54b083cb6d062e9dc3e3d53a8b1bbdf1a605c4a38a73608a6d8/source/.spm-autotools-configured-cfc9752a14ef13a342942478edc4ce1944a4f2b9cc3101f761043b12f2d3783c exists, ignoring.
+-- [SPM]: autotools configure already done for 'source' with these inputs, skipping.
+-- [SPM]: Stamp file /home/jam/projects/SPM-repo/build/_spm/openldap/2.7.1/319ed71d8e17b54b083cb6d062e9dc3e3d53a8b1bbdf1a605c4a38a73608a6d8/source/.spm-autotools-built exists, ignoring.
+-- [SPM]: autotools build already done for '/home/jam/projects/SPM-repo/build/_spm/openldap/2.7.1/319ed71d8e17b54b083cb6d062e9dc3e3d53a8b1bbdf1a605c4a38a73608a6d8/source', skipping.
+-- [SPM]: Target 'openldap::openldap' registered from '/home/jam/projects/SPM-repo/build/_spm/openldap/2.7.1/319ed71d8e17b54b083cb6d062e9dc3e3d53a8b1bbdf1a605c4a38a73608a6d8/install' (include=TRUE, lib=TRUE, bin=TRUE).
+-- [SPM]: Exiting (depth 0), cleared saved directory/registry/registry_ref/headers.
+-- [SPM]: Configured 'openldap@2.7.1'.
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/jam/projects/SPM-repo/build

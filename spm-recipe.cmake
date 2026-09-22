@@ -38,6 +38,17 @@ set(SPM_BUILD_SHARED_LIBS
 
 find_program(GIT_EXECUTABLE NAMES git)
 find_program(MESON_EXECUTABLE NAMES meson)
+find_program(SPM_SH_EXECUTABLE NAMES sh bash)
+find_program(MAKE_EXECUTABLE NAMES make mingw32-make)
+
+macro(_spm_requires_autotools)
+    if(NOT SPM_SH_EXECUTABLE)
+        spm_log_fatal("no POSIX shell (sh/bash) was found; autotools recipes need one, e.g. via MSYS2 on Windows")
+    endif()
+    if(NOT MAKE_EXECUTABLE)
+        spm_log_fatal("no make executable was found")
+    endif()
+endmacro()
 
 macro(_spm_requires_meson)
     if(NOT MESON_EXECUTABLE)
@@ -72,6 +83,17 @@ endfunction()
 macro(spm_execute_process)
     spm_log_debug("Executing ${ARGV}")
     execute_process(${ARGV})
+endmacro()
+
+macro(spm_execute_process_serialized tag)
+    set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-exec-${tag}")
+    spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
+    if(exists)
+        return()
+    endif()
+
+    spm_execute_process(${tag})
+    spm_write_stamp_file(FILE "${_stamp_file}")
 endmacro()
 
 #
@@ -475,6 +497,185 @@ function(spm_meson_build)
         spm_log_fatal("Install failed:\n${_install_output}")
     endif()
     _spm_meson_msvc_env_pop()
+endfunction()
+
+# AUTOTOOLS
+
+# spm_autotools_configure(
+#   [SOURCE_DIR source]
+#   [BUILD_DIR build]
+#   [INSTALL_DIR install]
+#   [OPTIONS ...]
+#   [DEPENDENCIES ...]
+# )
+function(spm_autotools_configure)
+    _spm_requires_autotools()
+
+    set(oneValArgs SOURCE_DIR BUILD_DIR INSTALL_DIR)
+    set(multiValArgs OPTIONS DEPENDENCIES)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(NOT B_SOURCE_DIR)
+        set(B_SOURCE_DIR source)
+    endif()
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR "${B_SOURCE_DIR}")
+    endif()
+    if(NOT B_INSTALL_DIR)
+        set(B_INSTALL_DIR install)
+    endif()
+    if(NOT IS_ABSOLUTE "${B_INSTALL_DIR}")
+        set(B_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${B_INSTALL_DIR}")
+    endif()
+    if(NOT IS_ABSOLUTE "${B_BUILD_DIR}")
+        set(B_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${B_BUILD_DIR}")
+    endif()
+    if(NOT IS_ABSOLUTE "${B_SOURCE_DIR}")
+        set(_abs_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/${B_SOURCE_DIR}")
+    else()
+        set(_abs_source_dir "${B_SOURCE_DIR}")
+    endif()
+
+    _spm_resolve_dependency_prefixes("${B_DEPENDENCIES}" _dep_prefixes)
+
+    string(SHA256 _stamp_key "${B_SOURCE_DIR}|${B_BUILD_DIR}|${B_INSTALL_DIR}|${B_OPTIONS}|${_dep_prefixes}")
+    set(_stamp_file "${B_BUILD_DIR}/.spm-autotools-configured-${_stamp_key}")
+    if(NOT SPM_FORCE_REBUILD)
+        spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR _stamped)
+        if(_stamped)
+            spm_log_debug("autotools configure already done for '${B_SOURCE_DIR}' with these inputs, skipping")
+            return()
+        endif()
+    endif()
+
+    set(_cppflags "")
+    set(_ldflags "")
+    set(_pc_paths "")
+    foreach(_prefix ${_dep_prefixes})
+        if(IS_DIRECTORY "${_prefix}/include")
+            list(APPEND _cppflags "-I${_prefix}/include")
+        endif()
+        if(IS_DIRECTORY "${_prefix}/lib")
+            list(APPEND _ldflags "-L${_prefix}/lib")
+        endif()
+        foreach(_sub lib/pkgconfig lib64/pkgconfig share/pkgconfig)
+            if(IS_DIRECTORY "${_prefix}/${_sub}")
+                list(APPEND _pc_paths "${_prefix}/${_sub}")
+            endif()
+        endforeach()
+    endforeach()
+
+    set(_env_args "")
+    if(_cppflags)
+        list(JOIN _cppflags " " _cppflags_str)
+        list(APPEND _env_args "CPPFLAGS=${_cppflags_str}")
+    endif()
+    if(_ldflags)
+        list(JOIN _ldflags " " _ldflags_str)
+        list(APPEND _env_args "LDFLAGS=${_ldflags_str}")
+    endif()
+    if(_pc_paths)
+        list(JOIN _pc_paths ":" _pc_paths_str)
+        list(APPEND _env_args "PKG_CONFIG_PATH=${_pc_paths_str}")
+    endif()
+
+    if(NOT B_BUILD_DIR STREQUAL _abs_source_dir)
+        file(MAKE_DIRECTORY "${B_BUILD_DIR}")
+        set(_configure_script "${_abs_source_dir}/configure")
+    else()
+        set(_configure_script "./configure")
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${CMAKE_COMMAND}
+        -E
+        env
+        ${_env_args}
+        ${SPM_SH_EXECUTABLE}
+        "${_configure_script}"
+        "--prefix=${B_INSTALL_DIR}"
+        ${B_OPTIONS}
+        WORKING_DIRECTORY
+        "${B_BUILD_DIR}"
+        RESULT_VARIABLE
+        _cfg_result
+        OUTPUT_VARIABLE
+        _cfg_output
+        ERROR_VARIABLE
+        _cfg_output)
+
+    if(NOT _cfg_result EQUAL 0)
+        spm_log_fatal("Configure failed:\n${_cfg_output}")
+    else()
+        spm_log_debug("Configure succeeded:\n${_cfg_output}")
+    endif()
+
+    spm_write_stamp_file(FILE "${_stamp_file}")
+    if(EXISTS "${B_BUILD_DIR}/.spm-autotools-built")
+        file(REMOVE "${B_BUILD_DIR}/.spm-autotools-built")
+    endif()
+endfunction()
+
+# spm_autotools_build(
+#   [BUILD_DIR source]
+# )
+function(spm_autotools_build)
+    _spm_requires_autotools()
+
+    set(oneValArgs BUILD_DIR)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR source)
+    endif()
+    if(NOT IS_ABSOLUTE "${B_BUILD_DIR}")
+        set(B_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${B_BUILD_DIR}")
+    endif()
+
+    set(_stamp_file "${B_BUILD_DIR}/.spm-autotools-built")
+    if(NOT SPM_FORCE_REBUILD)
+        spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR _stamped)
+        if(_stamped)
+            spm_log_debug("autotools build already done for '${B_BUILD_DIR}', skipping")
+            return()
+        endif()
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${MAKE_EXECUTABLE}
+        -j
+        ${SPM_PARALLEL_JOBS}
+        WORKING_DIRECTORY
+        "${B_BUILD_DIR}"
+        RESULT_VARIABLE
+        _build_result
+        OUTPUT_VARIABLE
+        _build_output
+        ERROR_VARIABLE
+        _build_output)
+    if(NOT _build_result EQUAL 0)
+        spm_log_fatal("Build failed:\n${_build_output}")
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${MAKE_EXECUTABLE}
+        install
+        WORKING_DIRECTORY
+        "${B_BUILD_DIR}"
+        RESULT_VARIABLE
+        _install_result
+        OUTPUT_VARIABLE
+        _install_output
+        ERROR_VARIABLE
+        _install_output)
+    if(NOT _install_result EQUAL 0)
+        spm_log_fatal("Install failed:\n${_install_output}")
+    endif()
+
+    spm_write_stamp_file(FILE "${_stamp_file}")
 endfunction()
 
 # GIT
