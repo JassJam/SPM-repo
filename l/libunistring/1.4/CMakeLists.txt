@@ -9,6 +9,7 @@ spm_extract_archive(ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/libunistring-1.4.tar.gz
 spm_apply_patch(
     PATCHES
         patches/undefines.patch
+        patches/cplusplus-linkage.patch
 )
 
 option(SPM_LIBUNISTRING_PIC "Build libunistring with -fPIC" ON)
