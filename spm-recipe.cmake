@@ -1245,6 +1245,70 @@ endfunction()
 #   |_ lib/
 #   |_ extra/
 #
+# spm_create_dummy_target(
+#   NAME <name>
+#   [OUT_TARGET_NAME <name>]
+#   [STATIC_LIBS <libs>...]
+# )
+function(spm_create_dummy_target)
+    set(_options "")
+    set(_one_value_args NAME OUT_TARGET_NAME)
+    set(_multi_value_args DEPENDENCIES)
+    cmake_parse_arguments(_sdt "${_options}" "${_one_value_args}" "${_multi_value_args}" ${ARGN})
+
+    if(NOT _sdt_NAME)
+        message(FATAL_ERROR "spm_create_dummy_target: NAME is required")
+    endif()
+
+    set(_sdt_target_name "${_sdt_NAME}_dummy")
+    set(SPM_IMPORT_NAME "${_sdt_NAME}")
+
+    if(NOT TARGET ${_sdt_target_name})
+        add_library(${_sdt_target_name} INTERFACE)
+
+        if(_sdt_DEPENDENCIES)
+            target_link_libraries(${_sdt_target_name} INTERFACE ${_sdt_DEPENDENCIES})
+        endif()
+    endif()
+
+    if(NOT TARGET ${_sdt_NAME}::${_sdt_NAME})
+        add_library(${_sdt_NAME}::${_sdt_NAME} ALIAS ${_sdt_target_name})
+    endif()
+
+    set(_config_dir "${CMAKE_CURRENT_BINARY_DIR}/${SPM_IMPORT_NAME}-dummy-config")
+    file(MAKE_DIRECTORY "${_config_dir}")
+
+    set(_config_file "${_config_dir}/${SPM_IMPORT_NAME}Config.cmake")
+    file(WRITE "${_config_file}"
+"# Auto-generated dummy config for ${SPM_IMPORT_NAME} (no build artifacts;
+# satisfied by the system or a no-op on this platform).
+if(NOT TARGET ${SPM_IMPORT_NAME}::${SPM_IMPORT_NAME})
+    add_library(${SPM_IMPORT_NAME}::${SPM_IMPORT_NAME} INTERFACE IMPORTED)
+")
+
+    if(_sdt_DEPENDENCIES)
+        file(APPEND "${_config_file}"
+"    set_target_properties(${SPM_IMPORT_NAME}::${SPM_IMPORT_NAME} PROPERTIES
+        INTERFACE_LINK_LIBRARIES \"${_sdt_DEPENDENCIES}\")
+")
+    endif()
+
+    file(APPEND "${_config_file}" "endif()\n")
+
+    install(DIRECTORY "${_config_dir}/" DESTINATION "lib/cmake/${SPM_IMPORT_NAME}")
+
+    if(_sdt_OUT_TARGET_NAME)
+        set(${_sdt_OUT_TARGET_NAME} ${_sdt_target_name})
+    endif()
+endfunction()
+
+# Creates a target from a package install directory laid out as:
+#   .
+#   |_ include/
+#   |_ bin/
+#   |_ lib/
+#   |_ extra/
+#
 # spm_create_target(
 #   NAME <name>
 #   [INSTALL_DIR <path>]

@@ -1,8 +1,6 @@
 include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
-spm_git_clone(
-    URL https://github.com/curl/curl.git
-    TAG curl-8_22_0)
+spm_git_clone(URL https://github.com/curl/curl.git TAG curl-8_22_0)
 
 option(CURL_USE_OPENSSL "Enable OpenSSL for SSL/TLS in curl" ON)
 option(CURL_USE_MBEDTLS "Enable mbedTLS for SSL/TLS in curl" OFF)
@@ -60,7 +58,8 @@ endif()
 
 if(USE_LIBIDN2)
     spm_requires(NAME libidn2 VERSION 2.3.8)
-    list(APPEND _curl_deps libidn2::libidn2)
+    spm_requires(NAME libunistring VERSION 1.4)
+    list(APPEND _curl_deps libidn2::libidn2 libunistring::libunistring)
 endif()
 
 if(CURL_USE_LIBPSL)
@@ -70,7 +69,8 @@ endif()
 
 if(SPM_CURL_WITH_LDAP)
     if(WIN32)
-        spm_log_fatal("SPM_CURL_WITH_LDAP is ON, but the openldap recipe has no Windows path (it requires a POSIX shell)")
+        spm_log_fatal(
+"SPM_CURL_WITH_LDAP is ON, but the openldap recipe has no Windows path (it requires a POSIX shell)")
     endif()
     spm_requires(NAME openldap VERSION 2.7.1)
     list(APPEND _curl_deps openldap::openldap)
@@ -81,29 +81,36 @@ if(NOT SPM_BUILD_SHARED_LIBS STREQUAL "" AND SPM_BUILD_SHARED_LIBS)
     set(_shared "ON")
 endif()
 
+if(SPM_CURL_WITH_LDAP)
+    set(_ldap_disable_flag "-DCURL_DISABLE_LDAP=OFF")
+else()
+    set(_ldap_disable_flag "-DCURL_DISABLE_LDAP=ON")
+endif()
+
 spm_cmake_configure(
     OPTIONS
-    "-DBUILD_SHARED_LIBS=${_shared}"
+"-DBUILD_SHARED_LIBS=${_shared}"
     -DBUILD_CURL_EXE=OFF
     -DBUILD_TESTING=OFF
     -DBUILD_LIBCURL_DOCS=OFF
-    "-DCURL_USE_OPENSSL=${CURL_USE_OPENSSL}"
-    "-DCURL_USE_MBEDTLS=${CURL_USE_MBEDTLS}"
-    "-DENABLE_ARES=${ENABLE_ARES}"
-    "-DCURL_USE_LIBSSH2=${CURL_USE_LIBSSH2}"
-    "-DUSE_NGHTTP2=${USE_NGHTTP2}"
-    "-DCURL_ZLIB=${CURL_ZLIB}"
-    "-DCURL_ZSTD=${CURL_ZSTD}"
-    "-DCURL_BROTLI=${CURL_BROTLI}"
-    "-DUSE_LIBIDN2=${USE_LIBIDN2}"
-    "-DCURL_USE_LIBPSL=${CURL_USE_LIBPSL}"
+"-DCURL_USE_OPENSSL=${CURL_USE_OPENSSL}"
+"-DCURL_USE_MBEDTLS=${CURL_USE_MBEDTLS}"
+"-DENABLE_ARES=${ENABLE_ARES}"
+"-DCURL_USE_LIBSSH2=${CURL_USE_LIBSSH2}"
+"-DUSE_NGHTTP2=${USE_NGHTTP2}"
+"-DCURL_ZLIB=${CURL_ZLIB}"
+"-DCURL_ZSTD=${CURL_ZSTD}"
+"-DCURL_BROTLI=${CURL_BROTLI}"
+"-DUSE_LIBIDN2=${USE_LIBIDN2}"
+"-DCURL_USE_LIBPSL=${CURL_USE_LIBPSL}"
+    ${_ldap_disable_flag}
     DEPENDENCIES
-    ${_curl_deps})
+${_curl_deps})
 
 spm_cmake_build()
 
-spm_create_target(NAME libcurl OUT_TARGET_NAME _curl_target)
+spm_create_target(NAME libcurl OUT_TARGET_NAME _curl_target DEPENDENCIES ${_curl_deps})
 
 if(WIN32)
-    target_link_libraries(${_curl_target} INTERFACE ws2_32 crypt32 advapi32)
+    target_link_libraries(${_curl_target} INTERFACE ws2_32 crypt32 advapi32 wldap32 winmm iphlpapi bcrypt secur32)
 endif()
