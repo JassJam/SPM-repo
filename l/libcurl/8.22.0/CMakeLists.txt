@@ -58,7 +58,7 @@ endif()
 
 if(USE_LIBIDN2)
     spm_requires(NAME libidn2 VERSION 2.3.8)
-    spm_requires(NAME libunistring VERSION 1.4)
+    spm_requires(NAME libunistring VERSION 1.4.2)
     list(APPEND _curl_deps libidn2::libidn2 libunistring::libunistring)
 endif()
 
