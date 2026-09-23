@@ -20,7 +20,6 @@ if(NOT SPM_BUILD_SHARED_LIBS STREQUAL "" AND SPM_BUILD_SHARED_LIBS)
     set(_shared "ON")
 endif()
 
-
 set(_configure_opts "--disable-dependency-tracking")
 
 if(_shared)
