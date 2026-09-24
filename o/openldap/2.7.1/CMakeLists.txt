@@ -11,14 +11,19 @@ if(NOT SPM_BUILD_SHARED_LIBS STREQUAL "" AND SPM_BUILD_SHARED_LIBS)
     set(_static "no")
 endif()
 
+spm_requires(NAME openssl VERSION 4.0.2)
+
 spm_autotools_configure(
     OPTIONS
     "--enable-shared=${_shared}"
     "--enable-static=${_static}"
     --disable-slapd
     --disable-backends
-    --without-cyrus-sasl)
+    --without-cyrus-sasl
+    --with-tls=openssl
+    DEPENDENCIES
+    openssl::openssl)
 
 spm_autotools_build()
 
-spm_create_target(NAME openldap)
+spm_create_target(NAME openldap DEPENDENCIES openssl::openssl)
