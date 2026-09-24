@@ -5,8 +5,8 @@ spm_git_clone(
     TAG v1.70.0)
 
 spm_apply_patch(
-	PATCHES
-	patches/nghttp2_shared.patch
+    PATCHES
+    patches/nghttp2_shared.patch
 )
 
 set(_shared "OFF")
