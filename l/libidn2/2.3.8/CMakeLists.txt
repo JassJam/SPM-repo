@@ -23,6 +23,7 @@ endif()
 set(_configure_opts
     "--enable-shared=${_shared}"
     "--enable-static=${_static}"
+    --with-pic
     --disable-doc
     --disable-nls)
 
