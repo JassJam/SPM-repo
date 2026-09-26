@@ -611,11 +611,13 @@ function(spm_autotools_configure)
         list(JOIN _pc_paths ":" _pc_paths_str)
         list(APPEND _env_args "PKG_CONFIG_PATH=${_pc_paths_str}")
     endif()
+    set(_restore_msvc_include FALSE)
     if(MSVC AND DEFINED ENV{INCLUDE} AND NOT "$ENV{INCLUDE}" STREQUAL "")
-        set(_msvc_include "$ENV{INCLUDE}")
+        set(_saved_msvc_include "$ENV{INCLUDE}")
+        set(_msvc_include "${_saved_msvc_include}")
         string(REPLACE "\\" "/" _msvc_include "${_msvc_include}")
-        string(REPLACE ";" "\\\\;" _msvc_include "${_msvc_include}")
-        list(APPEND _env_args "INCLUDE=${_msvc_include}")
+        set(ENV{INCLUDE} "${_msvc_include}")
+        set(_restore_msvc_include TRUE)
     endif()
 
     if(NOT B_BUILD_DIR STREQUAL _abs_source_dir)
@@ -643,6 +645,10 @@ function(spm_autotools_configure)
         _cfg_output
         ERROR_VARIABLE
         _cfg_output)
+
+    if(_restore_msvc_include)
+        set(ENV{INCLUDE} "${_saved_msvc_include}")
+    endif()
 
     if(NOT _cfg_result EQUAL 0)
         set(_config_log "${B_BUILD_DIR}/config.log")
