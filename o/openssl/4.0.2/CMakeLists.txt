@@ -45,6 +45,7 @@ if(MSVC)
     endif()
 
     set(_make_cmd "${NMAKE_EXECUTABLE}")
+    set(_make_parallel_args "")
 else()
     set(_target "")
     find_program(MAKE_EXECUTABLE NAMES make)
@@ -52,6 +53,7 @@ else()
         spm_log_fatal("openssl recipe requires make on PATH")
     endif()
     set(_make_cmd "${MAKE_EXECUTABLE}")
+    set(_make_parallel_args -j ${SPM_PARALLEL_JOBS})
 endif()
 
 string(SHA256 _stamp_key "${_source_dir}|${_install_dir}|${_target}|${_want_shared}")
@@ -90,8 +92,7 @@ if(NOT _stamped OR SPM_FORCE_REBUILD)
     spm_execute_process(
         COMMAND
         ${_make_cmd}
-        -j
-        ${SPM_PARALLEL_JOBS}
+        ${_make_parallel_args}
         WORKING_DIRECTORY
         "${_source_dir}"
         RESULT_VARIABLE
