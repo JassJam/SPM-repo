@@ -200,7 +200,19 @@ function(_spm_write_input_script)
         spm_log_fatal("_spm_write_input_script() requires PATH, BUILD_DIR and BUILD_TYPE")
     endif()
 
-    _spm_write_werror_wrapper(_werror_wrapper)
+    set(_launcher_block "")
+    if(MSVC)
+        set(_launcher_block
+            "set(CMAKE_C_COMPILER_LAUNCHER \"\" CACHE INTERNAL \"\" FORCE)
+set(CMAKE_CXX_COMPILER_LAUNCHER \"\" CACHE INTERNAL \"\" FORCE)
+")
+    else()
+        _spm_write_werror_wrapper(_werror_wrapper)
+        set(_launcher_block
+            "set(CMAKE_C_COMPILER_LAUNCHER \"${CMAKE_COMMAND};-P;${_werror_wrapper};--\" CACHE INTERNAL \"\" FORCE)
+set(CMAKE_CXX_COMPILER_LAUNCHER \"${CMAKE_COMMAND};-P;${_werror_wrapper};--\" CACHE INTERNAL \"\" FORCE)
+")
+    endif()
 
     file(
         WRITE "${B_PATH}"
@@ -212,8 +224,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE INTERNAL \"\")
 set(CMAKE_OBJECT_PATH_MAX 1024 CACHE INTERNAL \"\")
 
 set(CMAKE_COMPILE_WARNING_AS_ERROR OFF CACHE INTERNAL \"\" FORCE)
-set(CMAKE_C_COMPILER_LAUNCHER \"${CMAKE_COMMAND};-P;${_werror_wrapper};--\" CACHE INTERNAL \"\" FORCE)
-set(CMAKE_CXX_COMPILER_LAUNCHER \"${CMAKE_COMMAND};-P;${_werror_wrapper};--\" CACHE INTERNAL \"\" FORCE)
+${_spm_clear_launcher_block}
 
 set(CMAKE_UNITY_BUILD OFF CACHE INTERNAL \"\" FORCE)
 set(CMAKE_C_CLANG_TIDY \"\" CACHE INTERNAL \"\" FORCE)

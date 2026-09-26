@@ -24,6 +24,17 @@ runs:
       with:
         arch: ${{ steps.msvc-arch.outputs.arch }}
 
+    - name: Pin full Perl for OpenSSL Configure (avoid Git's bundled MSYS Perl)
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        if [ -x "/c/Strawberry/perl/bin/perl.exe" ]; then
+          echo "SPM_PERL_EXECUTABLE=/c/Strawberry/perl/bin/perl.exe" >> "$GITHUB_ENV"
+          echo "/c/Strawberry/perl/bin" >> "$GITHUB_PATH"
+        else
+          echo "::warning::Strawberry Perl not found at expected path; OpenSSL's Configure may fail if Git's bundled Perl is picked up instead."
+        fi
+
     - name: Install ATL component
       if: contains(matrix.config.os, 'windows')
       shell: pwsh
@@ -39,6 +50,10 @@ runs:
     - name: Install Ninja
       shell: pwsh
       run: choco install ninja -y
+
+    - name: Install dependencies
+      shell: pwsh
+      run: pip install meson
 
     - name: Set default CMake generator
       shell: bash

@@ -2,7 +2,7 @@ include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
 spm_requires(
     NAME zlib
-    VERSION v1.3.2
+    VERSION 1.3.2
     IMPORT_NAME assimp_deps
     OPTIONS
     "ZLIB_BUILD_MINIZIP=ON"

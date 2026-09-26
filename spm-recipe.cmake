@@ -37,6 +37,28 @@ set(SPM_BUILD_SHARED_LIBS
 #
 
 find_program(GIT_EXECUTABLE NAMES git)
+find_program(MESON_EXECUTABLE NAMES meson)
+find_program(SPM_SH_EXECUTABLE NAMES sh bash)
+find_program(MAKE_EXECUTABLE NAMES make mingw32-make)
+
+if(MSVC AND EXISTS "/usr/bin/sh")
+    set(SPM_SH_EXECUTABLE "/usr/bin/sh")
+endif()
+
+macro(_spm_requires_autotools)
+    if(NOT SPM_SH_EXECUTABLE)
+        spm_log_fatal("no POSIX shell (sh/bash) was found; autotools recipes need one, e.g. via MSYS2 on Windows")
+    endif()
+    if(NOT MAKE_EXECUTABLE)
+        spm_log_fatal("no make executable was found")
+    endif()
+endmacro()
+
+macro(_spm_requires_meson)
+    if(NOT MESON_EXECUTABLE)
+        spm_log_fatal("no meson executable was found")
+    endif()
+endmacro()
 
 macro(_spm_requires_git)
     if(NOT GIT_EXECUTABLE)
@@ -65,6 +87,17 @@ endfunction()
 macro(spm_execute_process)
     spm_log_debug("Executing ${ARGV}")
     execute_process(${ARGV})
+endmacro()
+
+macro(spm_execute_process_serialized tag)
+    set(_stamp_file "${CMAKE_CURRENT_SOURCE_DIR}/.spm-exec-${tag}")
+    spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR exists)
+    if(exists)
+        return()
+    endif()
+
+    spm_execute_process(${tag})
+    spm_write_stamp_file(FILE "${_stamp_file}")
 endmacro()
 
 #
@@ -210,6 +243,880 @@ function(_spm_resolve_dependency_targets deps out_var)
         PARENT_SCOPE)
 endfunction()
 
+#
+
+function(_spm_resolve_dependency_prefixes deps out_var)
+    get_property(
+        _declared
+        DIRECTORY
+        PROPERTY SPM_RECIPE_DEPENDENCIES)
+    set(_prefixes "")
+    foreach(_dep ${deps})
+        if(NOT _dep IN_LIST _declared)
+            spm_log_fatal("DEPENDENCIES entry '${_dep}' was not declared via spm_requires() in this recipe")
+        endif()
+        get_property(_dep_dir GLOBAL PROPERTY SPM_DEP_INSTALL_DIR_NAME_${_dep})
+        if(NOT _dep_dir)
+            spm_log_fatal("No install directory recorded for dependency '${_dep}'")
+        endif()
+        list(APPEND _prefixes "${_dep_dir}")
+    endforeach()
+    set(${out_var}
+        "${_prefixes}"
+        PARENT_SCOPE)
+endfunction()
+
+macro(_spm_meson_msvc_env_push)
+    set(_spm_meson_saved_path "$ENV{PATH}")
+    set(_spm_meson_use_vsenv FALSE)
+    if(MSVC)
+        set(_spm_meson_cl "")
+        if(CMAKE_C_COMPILER)
+            set(_spm_meson_cl "${CMAKE_C_COMPILER}")
+        elseif(CMAKE_CXX_COMPILER)
+            set(_spm_meson_cl "${CMAKE_CXX_COMPILER}")
+        endif()
+        if(DEFINED ENV{VSINSTALLDIR} AND _spm_meson_cl)
+            get_filename_component(_spm_meson_msvc_bin "${_spm_meson_cl}" DIRECTORY)
+            file(TO_NATIVE_PATH "${_spm_meson_msvc_bin}" _spm_meson_msvc_bin)
+            set(ENV{PATH} "${_spm_meson_msvc_bin};$ENV{PATH}")
+            spm_log_debug("Prepended '${_spm_meson_msvc_bin}' to PATH for meson")
+        else()
+            set(_spm_meson_use_vsenv TRUE)
+        endif()
+    endif()
+endmacro()
+
+macro(_spm_meson_msvc_env_pop)
+    set(ENV{PATH} "${_spm_meson_saved_path}")
+endmacro()
+
+# MESON
+
+# Configure a meson target
+#
+# spm_meson_configure(
+#   [SOURCE_DIR source]
+#   [BUILD_DIR build]
+#   [INSTALL_DIR install]
+#   [OPTIONS ...]
+#   [DEPENDENCIES ...]
+#   [NATIVE_FILE <file>...]
+#   [CROSS_FILE <file>...]
+# )
+function(spm_meson_configure)
+    _spm_requires_meson()
+
+    set(oneValArgs SOURCE_DIR BUILD_DIR INSTALL_DIR)
+    set(multiValArgs OPTIONS DEPENDENCIES NATIVE_FILE CROSS_FILE)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(B_UNPARSED_ARGUMENTS)
+        spm_log_fatal("spm_meson_configure() got unrecognized arguments: ${B_UNPARSED_ARGUMENTS}")
+    endif()
+
+    if(NOT B_SOURCE_DIR)
+        set(B_SOURCE_DIR source)
+    endif()
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    if(NOT B_INSTALL_DIR)
+        set(B_INSTALL_DIR install)
+    endif()
+
+    if(NOT IS_ABSOLUTE "${B_INSTALL_DIR}")
+        set(B_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${B_INSTALL_DIR}")
+    endif()
+
+    if(IS_ABSOLUTE "${B_BUILD_DIR}")
+        set(_build_abs "${B_BUILD_DIR}")
+    else()
+        set(_build_abs "${CMAKE_CURRENT_SOURCE_DIR}/${B_BUILD_DIR}")
+    endif()
+
+    set(_args --prefix "${B_INSTALL_DIR}" --libdir lib)
+
+    # SPM_BUILD_TYPE uses CMake naming, map it onto meson's --buildtype.
+    if(SPM_BUILD_TYPE)
+        string(TOLOWER "${SPM_BUILD_TYPE}" _bt)
+        if(_bt STREQUAL "debug")
+            set(_meson_bt debug)
+        elseif(_bt STREQUAL "release")
+            set(_meson_bt release)
+        elseif(_bt STREQUAL "relwithdebinfo")
+            set(_meson_bt debugoptimized)
+        elseif(_bt STREQUAL "minsizerel")
+            set(_meson_bt minsize)
+        else()
+            spm_log_fatal("SPM_BUILD_TYPE '${SPM_BUILD_TYPE}' has no meson buildtype equivalent")
+        endif()
+        list(APPEND _args --buildtype "${_meson_bt}")
+    endif()
+
+    if(NOT SPM_BUILD_SHARED_LIBS STREQUAL "")
+        if(SPM_BUILD_SHARED_LIBS)
+            list(APPEND _args --default-library shared)
+        else()
+            list(APPEND _args --default-library static)
+        endif()
+    endif()
+
+    _spm_resolve_dependency_prefixes("${B_DEPENDENCIES}" _dep_prefixes)
+
+    set(_pc_paths "")
+    foreach(_prefix ${_dep_prefixes})
+        foreach(_sub lib/pkgconfig lib64/pkgconfig share/pkgconfig)
+            if(IS_DIRECTORY "${_prefix}/${_sub}")
+                list(APPEND _pc_paths "${_prefix}/${_sub}")
+            endif()
+        endforeach()
+    endforeach()
+    if(_pc_paths)
+        list(JOIN _pc_paths "," _pc_paths_str)
+        list(APPEND _args "-Dpkg_config_path=${_pc_paths_str}")
+    endif()
+
+    set(_cmake_paths ${CMAKE_PREFIX_PATH} ${_dep_prefixes})
+    if(_cmake_paths)
+        list(JOIN _cmake_paths "," _cmake_paths_str)
+        list(APPEND _args "-Dcmake_prefix_path=${_cmake_paths_str}")
+    endif()
+
+    foreach(_file ${B_NATIVE_FILE})
+        list(APPEND _args --native-file "${_file}")
+    endforeach()
+    foreach(_file ${B_CROSS_FILE})
+        list(APPEND _args --cross-file "${_file}")
+    endforeach()
+
+    set(_env_cmd "")
+    if(NOT B_CROSS_FILE)
+        set(_env_vars "")
+        if(CMAKE_C_COMPILER)
+            list(APPEND _env_vars "CC=${CMAKE_C_COMPILER}")
+        endif()
+        if(CMAKE_CXX_COMPILER)
+            list(APPEND _env_vars "CXX=${CMAKE_CXX_COMPILER}")
+        endif()
+        if(_env_vars)
+            set(_env_cmd ${CMAKE_COMMAND} -E env ${_env_vars})
+        endif()
+    endif()
+
+    _spm_meson_msvc_env_push()
+    if(_spm_meson_use_vsenv)
+        list(APPEND _args --vsenv)
+    endif()
+
+    if(EXISTS "${_build_abs}/meson-private/coredata.dat")
+        list(APPEND _args --reconfigure)
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${_env_cmd}
+        ${MESON_EXECUTABLE}
+        setup
+        ${_args}
+        ${B_OPTIONS}
+        "${B_BUILD_DIR}"
+        "${B_SOURCE_DIR}"
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _cfg_result
+        OUTPUT_VARIABLE
+        _cfg_output
+        ERROR_VARIABLE
+        _cfg_output)
+    _spm_meson_msvc_env_pop()
+
+    if(NOT _cfg_result EQUAL 0)
+        spm_log_fatal("Configure failed:\n${_cfg_output}")
+    else()
+        spm_log_debug("Configure succeeded:\n${_cfg_output}")
+    endif()
+endfunction()
+
+function(spm_meson_build)
+    _spm_requires_meson()
+
+    set(oneValArgs BUILD_DIR)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(B_UNPARSED_ARGUMENTS)
+        spm_log_fatal("spm_meson_build() got unrecognized arguments: ${B_UNPARSED_ARGUMENTS}")
+    endif()
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    _spm_meson_msvc_env_push()
+    set(_vsenv_arg "")
+    if(_spm_meson_use_vsenv)
+        set(_vsenv_arg --vsenv)
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${MESON_EXECUTABLE}
+        compile
+        ${_vsenv_arg}
+        -C
+        "${B_BUILD_DIR}"
+        -j
+        ${SPM_PARALLEL_JOBS}
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _build_result
+        OUTPUT_VARIABLE
+        _build_output
+        ERROR_VARIABLE
+        _build_output)
+    if(NOT _build_result EQUAL 0)
+        spm_log_fatal("Build failed:\n${_build_output}")
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${MESON_EXECUTABLE}
+        install
+        -C
+        "${B_BUILD_DIR}"
+        --no-rebuild
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _install_result
+        OUTPUT_VARIABLE
+        _install_output
+        ERROR_VARIABLE
+        _install_output)
+    if(NOT _install_result EQUAL 0)
+        spm_log_fatal("Install failed:\n${_install_output}")
+    endif()
+    _spm_meson_msvc_env_pop()
+endfunction()
+
+# AUTOTOOLS
+
+# spm_autotools_configure(
+#   [SOURCE_DIR source]
+#   [BUILD_DIR build]
+#   [INSTALL_DIR install]
+#   [OPTIONS ...]
+#   [DEPENDENCIES ...]
+# )
+function(spm_autotools_configure)
+    _spm_requires_autotools()
+
+    set(oneValArgs SOURCE_DIR BUILD_DIR INSTALL_DIR)
+    set(multiValArgs OPTIONS DEPENDENCIES)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(NOT B_SOURCE_DIR)
+        set(B_SOURCE_DIR source)
+    endif()
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR "${B_SOURCE_DIR}")
+    endif()
+    if(NOT B_INSTALL_DIR)
+        set(B_INSTALL_DIR install)
+    endif()
+    if(NOT IS_ABSOLUTE "${B_INSTALL_DIR}")
+        set(B_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${B_INSTALL_DIR}")
+    endif()
+    if(NOT IS_ABSOLUTE "${B_BUILD_DIR}")
+        set(B_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${B_BUILD_DIR}")
+    endif()
+    if(NOT IS_ABSOLUTE "${B_SOURCE_DIR}")
+        set(_abs_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/${B_SOURCE_DIR}")
+    else()
+        set(_abs_source_dir "${B_SOURCE_DIR}")
+    endif()
+
+    _spm_resolve_dependency_prefixes("${B_DEPENDENCIES}" _dep_prefixes)
+
+    set(_has_pic_opt FALSE)
+    foreach(_opt ${B_OPTIONS})
+        if(_opt MATCHES "pic")
+            set(_has_pic_opt TRUE)
+        endif()
+    endforeach()
+    if(NOT _has_pic_opt)
+        list(APPEND B_OPTIONS --with-pic)
+    endif()
+
+    if(MSVC)
+        spm_write_msvc_compile_wrapper(_msvc_compile_wrapper)
+        set(_has_cc_opt FALSE)
+        foreach(_opt ${B_OPTIONS})
+            if(_opt MATCHES "^CC=")
+                set(_has_cc_opt TRUE)
+            endif()
+        endforeach()
+        if(NOT _has_cc_opt)
+            list(APPEND B_OPTIONS
+                "CC=${_msvc_compile_wrapper} cl -nologo"
+                "CXX=${_msvc_compile_wrapper} cl -nologo -EHsc"
+                "CFLAGS=-MD"
+                "CXXFLAGS=-MD"
+                "LD=link"
+                "NM=dumpbin -symbols"
+                "AR=${_msvc_compile_wrapper} lib -nologo"
+                "RANLIB=:")
+        endif()
+    else()
+        list(APPEND B_OPTIONS "CFLAGS=-g -O2 -std=gnu17")
+    endif()
+
+    string(SHA256 _stamp_key "${B_SOURCE_DIR}|${B_BUILD_DIR}|${B_INSTALL_DIR}|${B_OPTIONS}|${_dep_prefixes}")
+    set(_stamp_file "${B_BUILD_DIR}/.spm-autotools-configured-${_stamp_key}")
+    if(NOT SPM_FORCE_REBUILD)
+        spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR _stamped)
+        if(_stamped)
+            spm_log_debug("autotools configure already done for '${B_SOURCE_DIR}' with these inputs, skipping")
+            return()
+        endif()
+    endif()
+
+    set(_cppflags "")
+    set(_ldflags "")
+    set(_pc_paths "")
+    foreach(_prefix ${_dep_prefixes})
+        if(IS_DIRECTORY "${_prefix}/include")
+            list(APPEND _cppflags "-I${_prefix}/include")
+        endif()
+        if(IS_DIRECTORY "${_prefix}/lib")
+            list(APPEND _ldflags "-L${_prefix}/lib")
+        endif()
+        foreach(_sub lib/pkgconfig lib64/pkgconfig share/pkgconfig)
+            if(IS_DIRECTORY "${_prefix}/${_sub}")
+                list(APPEND _pc_paths "${_prefix}/${_sub}")
+            endif()
+        endforeach()
+    endforeach()
+
+    set(_env_args "")
+    if(_cppflags)
+        list(JOIN _cppflags " " _cppflags_str)
+        list(APPEND _env_args "CPPFLAGS=${_cppflags_str}")
+    endif()
+    if(_ldflags)
+        list(JOIN _ldflags " " _ldflags_str)
+        list(APPEND _env_args "LDFLAGS=${_ldflags_str}")
+    endif()
+    if(_pc_paths)
+        list(JOIN _pc_paths ":" _pc_paths_str)
+        list(APPEND _env_args "PKG_CONFIG_PATH=${_pc_paths_str}")
+    endif()
+    if(MSVC AND EXISTS "/usr/bin/sh")
+        # Keep configure-generated SHELL assignments free of spaces ("C:/Program Files/..."),
+        # otherwise Makefile rules that invoke $(SHELL) fail under /usr/bin/sh.
+        list(APPEND _env_args "CONFIG_SHELL=/usr/bin/sh" "SHELL=/usr/bin/sh")
+    endif()
+    set(_restore_msvc_include FALSE)
+    if(MSVC AND DEFINED ENV{INCLUDE} AND NOT "$ENV{INCLUDE}" STREQUAL "")
+        set(_saved_msvc_include "$ENV{INCLUDE}")
+        set(_msvc_include "${_saved_msvc_include}")
+        string(REPLACE "\\" "/" _msvc_include "${_msvc_include}")
+        set(ENV{INCLUDE} "${_msvc_include}")
+        set(_restore_msvc_include TRUE)
+    endif()
+
+    if(NOT B_BUILD_DIR STREQUAL _abs_source_dir)
+        file(MAKE_DIRECTORY "${B_BUILD_DIR}")
+        set(_configure_script "${_abs_source_dir}/configure")
+    else()
+        set(_configure_script "./configure")
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${CMAKE_COMMAND}
+        -E
+        env
+        ${_env_args}
+        ${SPM_SH_EXECUTABLE}
+        "${_configure_script}"
+        "--prefix=${B_INSTALL_DIR}"
+        ${B_OPTIONS}
+        WORKING_DIRECTORY
+        "${B_BUILD_DIR}"
+        RESULT_VARIABLE
+        _cfg_result
+        OUTPUT_VARIABLE
+        _cfg_output
+        ERROR_VARIABLE
+        _cfg_output)
+
+    if(_restore_msvc_include)
+        set(ENV{INCLUDE} "${_saved_msvc_include}")
+    endif()
+
+    if(NOT _cfg_result EQUAL 0)
+        set(_config_log "${B_BUILD_DIR}/config.log")
+        set(_config_log_text "")
+        if(EXISTS "${_config_log}")
+            file(READ "${_config_log}" _config_log_text)
+        endif()
+        spm_log_fatal("Configure failed:\n${_cfg_output}\n\n--- config.log ---\n${_config_log_text}")
+    else()
+        spm_log_debug("Configure succeeded:\n${_cfg_output}")
+    endif()
+
+    spm_write_stamp_file(FILE "${_stamp_file}")
+    if(EXISTS "${B_BUILD_DIR}/.spm-autotools-built")
+        file(REMOVE "${B_BUILD_DIR}/.spm-autotools-built")
+    endif()
+endfunction()
+
+# spm_write_msvc_compile_wrapper(OUT_VAR)
+#
+# Writes a script that lets a plain autoconf-generated
+# `configure`/`make` drive cl.exe (or clang-cl/icl), which otherwise fails
+# immediately because cl.exe doesn't understand GCC-style `-c -o file` flags.
+function(spm_write_msvc_compile_wrapper OUT_VAR)
+    set(_dir "${CMAKE_CURRENT_SOURCE_DIR}/msvc-compile-wrapper")
+    set(_path "${_dir}/compile")
+
+    if(NOT EXISTS "${_path}")
+        file(MAKE_DIRECTORY "${_dir}")
+        file(WRITE "${_path}" [=[#! /bin/sh
+# Wrapper for compilers which do not understand '-c -o'.
+
+scriptversion=2024-06-19.01; # UTC
+
+# Copyright (C) 1999-2024 Free Software Foundation, Inc.
+# Written by Tom Tromey <tromey@cygnus.com>.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+# As a special exception to the GNU General Public License, if you
+# distribute this file as part of a program that contains a
+# configuration script generated by Autoconf, you may include it under
+# the same distribution terms that you use for the rest of that program.
+
+# This file is maintained in Automake, please report
+# bugs to <bug-automake@gnu.org> or send patches to
+# <automake-patches@gnu.org>.
+
+nl='
+'
+
+# We need space, tab and new line, in precisely that order. Quoting is
+# there to prevent tools from complaining about whitespace usage.
+IFS=" ""	$nl"
+
+file_conv=
+
+# func_file_conv build_file lazy
+# Convert a $build file to $host form and store it in $file
+# Currently only supports Windows hosts. If the determined conversion
+# type is listed in (the comma separated) LAZY, no conversion will
+# take place.
+func_file_conv ()
+{
+  file=$1
+  case $file in
+    / | /[!/]*) # absolute file, and not a UNC file
+      if test -z "$file_conv"; then
+	# lazily determine how to convert abs files
+	case `uname -s` in
+	  MINGW*)
+	    file_conv=mingw
+	    ;;
+	  CYGWIN* | MSYS*)
+	    file_conv=cygwin
+	    ;;
+	  *)
+	    file_conv=wine
+	    ;;
+	esac
+      fi
+      case $file_conv/,$2, in
+	*,$file_conv,*)
+	  ;;
+	mingw/*)
+	  file=`cmd //C echo "$file " | sed -e 's/"\(.*\) " *$/\1/'`
+	  ;;
+	cygwin/* | msys/*)
+	  file=`cygpath -m "$file" || echo "$file"`
+	  ;;
+	wine/*)
+	  file=`winepath -w "$file" || echo "$file"`
+	  ;;
+      esac
+      ;;
+  esac
+}
+
+# func_cl_dashL linkdir
+# Make cl look for libraries in LINKDIR
+func_cl_dashL ()
+{
+  func_file_conv "$1"
+  if test -z "$lib_path"; then
+    lib_path=$file
+  else
+    lib_path="$lib_path;$file"
+  fi
+  linker_opts="$linker_opts -LIBPATH:$file"
+}
+
+# func_cl_dashl library
+# Do a library search-path lookup for cl
+func_cl_dashl ()
+{
+  lib=$1
+  found=no
+  save_IFS=$IFS
+  IFS=';'
+  for dir in $lib_path $LIB
+  do
+    IFS=$save_IFS
+    if $shared && test -f "$dir/$lib.dll.lib"; then
+      found=yes
+      lib=$dir/$lib.dll.lib
+      break
+    fi
+    if test -f "$dir/$lib.lib"; then
+      found=yes
+      lib=$dir/$lib.lib
+      break
+    fi
+    if test -f "$dir/lib$lib.a"; then
+      found=yes
+      lib=$dir/lib$lib.a
+      break
+    fi
+  done
+  IFS=$save_IFS
+
+  if test "$found" != yes; then
+    lib=$lib.lib
+  fi
+}
+
+# func_cl_wrapper cl arg...
+# Adjust compile command to suit cl
+func_cl_wrapper ()
+{
+  # Assume a capable shell
+  lib_path=
+  shared=:
+  linker_opts=
+  for arg
+  do
+    if test -n "$eat"; then
+      eat=
+    else
+      case $1 in
+	-o)
+	  # configure might choose to run compile as 'compile cc -o foo foo.c'.
+	  eat=1
+	  case $2 in
+	    *.o | *.lo | *.[oO][bB][jJ])
+	      func_file_conv "$2"
+	      set x "$@" -Fo"$file"
+	      shift
+	      ;;
+	    *)
+	      func_file_conv "$2"
+	      set x "$@" -Fe"$file"
+	      shift
+	      ;;
+	  esac
+	  ;;
+	-I)
+	  eat=1
+	  func_file_conv "$2" mingw
+	  set x "$@" -I"$file"
+	  shift
+	  ;;
+	-I*)
+	  func_file_conv "${1#-I}" mingw
+	  set x "$@" -I"$file"
+	  shift
+	  ;;
+	-l)
+	  eat=1
+	  func_cl_dashl "$2"
+	  set x "$@" "$lib"
+	  shift
+	  ;;
+	-l*)
+	  func_cl_dashl "${1#-l}"
+	  set x "$@" "$lib"
+	  shift
+	  ;;
+	-L)
+	  eat=1
+	  func_cl_dashL "$2"
+	  ;;
+	-L*)
+	  func_cl_dashL "${1#-L}"
+	  ;;
+	-static)
+	  shared=false
+	  ;;
+	-Wl,*)
+	  arg=${1#-Wl,}
+	  save_ifs="$IFS"; IFS=','
+	  for flag in $arg; do
+	    IFS="$save_ifs"
+	    linker_opts="$linker_opts $flag"
+	  done
+	  IFS="$save_ifs"
+	  ;;
+	-Xlinker)
+	  eat=1
+	  linker_opts="$linker_opts $2"
+	  ;;
+	-*)
+	  set x "$@" "$1"
+	  shift
+	  ;;
+	*.cc | *.CC | *.cxx | *.CXX | *.[cC]++)
+	  func_file_conv "$1"
+	  set x "$@" -Tp"$file"
+	  shift
+	  ;;
+	*.c | *.cpp | *.CPP | *.lib | *.LIB | *.Lib | *.OBJ | *.obj | *.[oO])
+	  func_file_conv "$1" mingw
+	  set x "$@" "$file"
+	  shift
+	  ;;
+	*)
+	  set x "$@" "$1"
+	  shift
+	  ;;
+      esac
+    fi
+    shift
+  done
+  if test -n "$linker_opts"; then
+    linker_opts="-link$linker_opts"
+  fi
+  exec "$@" $linker_opts
+  exit 1
+}
+
+eat=
+
+case $1 in
+  '')
+     echo "$0: No command. Try '$0 --help' for more information." 1>&2
+     exit 1;
+     ;;
+  -h | --h*)
+    cat <<\EOF
+Usage: compile [--help] [--version] PROGRAM [ARGS]
+
+Wrapper for compilers which do not understand '-c -o'.
+Remove '-o dest.o' from ARGS, run PROGRAM with the remaining
+arguments, and rename the output as expected.
+
+If you are trying to build a whole package this is not the
+right script to run: please start by reading the file 'INSTALL'.
+
+Report bugs to <bug-automake@gnu.org>.
+GNU Automake home page: <https://www.gnu.org/software/automake/>.
+General help using GNU software: <https://www.gnu.org/gethelp/>.
+EOF
+    exit $?
+    ;;
+  -v | --v*)
+    echo "compile (GNU Automake) $scriptversion"
+    exit $?
+    ;;
+  cl | *[/\\]cl | cl.exe | *[/\\]cl.exe | \
+  clang-cl | *[/\\]clang-cl | clang-cl.exe | *[/\\]clang-cl.exe | \
+  icl | *[/\\]icl | icl.exe | *[/\\]icl.exe )
+    func_cl_wrapper "$@"      # Doesn't return...
+    ;;
+esac
+
+ofile=
+cfile=
+
+for arg
+do
+  if test -n "$eat"; then
+    eat=
+  else
+    case $1 in
+      -o)
+	# configure might choose to run compile as 'compile cc -o foo foo.c'.
+	# So we strip '-o arg' only if arg is an object.
+	eat=1
+	case $2 in
+	  *.o | *.obj)
+	    ofile=$2
+	    ;;
+	  *)
+	    set x "$@" -o "$2"
+	    shift
+	    ;;
+	esac
+	;;
+      *.c)
+	cfile=$1
+	set x "$@" "$1"
+	shift
+	;;
+      *)
+	set x "$@" "$1"
+	shift
+	;;
+    esac
+  fi
+  shift
+done
+
+if test -z "$ofile" || test -z "$cfile"; then
+  # If no '-o' option was seen then we might have been invoked from a
+  # pattern rule where we don't need one. That is ok -- this is a
+  # normal compilation that the losing compiler can handle. If no
+  # '.c' file was seen then we are probably linking. That is also
+  # ok.
+  exec "$@"
+fi
+
+# Name of file we expect compiler to create.
+cofile=`echo "$cfile" | sed 's|^.*[\\/]||; s|^[a-zA-Z]:||; s/\.c$/.o/'`
+
+# Create the lock directory.
+# Note: use '[/\\:.-]' here to ensure that we don't use the same name
+# that we are using for the .o file. Also, base the name on the expected
+# object file name, since that is what matters with a parallel build.
+lockdir=`echo "$cofile" | sed -e 's|[/\\:.-]|_|g'`.d
+while true; do
+  if mkdir "$lockdir" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+# FIXME: race condition here if user kills between mkdir and trap.
+trap "rmdir '$lockdir'; exit 1" 1 2 15
+
+# Run the compile.
+"$@"
+ret=$?
+
+if test -f "$cofile"; then
+  test "$cofile" = "$ofile" || mv "$cofile" "$ofile"
+elif test -f "${cofile}bj"; then
+  test "${cofile}bj" = "$ofile" || mv "${cofile}bj" "$ofile"
+fi
+
+rmdir "$lockdir"
+exit $ret
+
+# Local Variables:
+# mode: shell-script
+# sh-indentation: 2
+# eval: (add-hook 'before-save-hook 'time-stamp)
+# time-stamp-start: "scriptversion="
+# time-stamp-format: "%:y-%02m-%02d.%02H"
+# time-stamp-time-zone: "UTC0"
+# time-stamp-end: "; # UTC"
+# End:
+]=])
+        # Mark executable (CMake 3.19+; spm-recipe.cmake already requires 3.24).
+        file(CHMOD "${_path}"
+            PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                        GROUP_READ GROUP_EXECUTE
+                        WORLD_READ WORLD_EXECUTE)
+    endif()
+
+    set(${OUT_VAR} "${_path}" PARENT_SCOPE)
+endfunction()
+
+# spm_autotools_build(
+#   [BUILD_DIR source]
+# )
+function(spm_autotools_build)
+    _spm_requires_autotools()
+
+    set(oneValArgs BUILD_DIR)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR source)
+    endif()
+    if(NOT IS_ABSOLUTE "${B_BUILD_DIR}")
+        set(B_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${B_BUILD_DIR}")
+    endif()
+
+    set(_stamp_file "${B_BUILD_DIR}/.spm-autotools-built")
+    if(NOT SPM_FORCE_REBUILD)
+        spm_check_stamp_file(FILE "${_stamp_file}" OUT_VAR _stamped)
+        if(_stamped)
+            spm_log_debug("autotools build already done for '${B_BUILD_DIR}', skipping")
+            return()
+        endif()
+    endif()
+
+    set(_make_args "-j" "${SPM_PARALLEL_JOBS}")
+    if(MSVC AND EXISTS "/usr/bin/sh")
+        list(APPEND _make_args "SHELL=/usr/bin/sh" "CONFIG_SHELL=/usr/bin/sh")
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${MAKE_EXECUTABLE}
+        ${_make_args}
+        WORKING_DIRECTORY
+        "${B_BUILD_DIR}"
+        RESULT_VARIABLE
+        _build_result
+        OUTPUT_VARIABLE
+        _build_output
+        ERROR_VARIABLE
+        _build_output)
+    if(NOT _build_result EQUAL 0)
+        spm_log_fatal("Build failed:\n${_build_output}")
+    endif()
+
+    spm_execute_process(
+        COMMAND
+        ${MAKE_EXECUTABLE}
+        ${_make_args}
+        install
+        WORKING_DIRECTORY
+        "${B_BUILD_DIR}"
+        RESULT_VARIABLE
+        _install_result
+        OUTPUT_VARIABLE
+        _install_output
+        ERROR_VARIABLE
+        _install_output)
+    if(NOT _install_result EQUAL 0)
+        spm_log_fatal("Install failed:\n${_install_output}")
+    endif()
+
+    spm_write_stamp_file(FILE "${_stamp_file}")
+endfunction()
+
+# GIT
+
 # Fetches from a git source
 # spm_git_clone(
 #   URL <url>
@@ -343,6 +1250,147 @@ function(spm_git_clone)
 
     spm_write_stamp_file(FILE "${_stamp_file}")
 endfunction()
+
+# Configure a cmake target
+# spm_cmake_configure(
+#   [SOURCE_DIR source]
+#   [BUILD_DIR build]
+#   [INSTALL_DIR install]
+#   [OPTIONS ...]
+#   [DEPENDENCIES ...]
+# )
+function(spm_cmake_configure)
+    _spm_requires_git()
+
+    set(oneValArgs SOURCE_DIR BUILD_DIR INSTALL_DIR)
+    set(multiValArgs OPTIONS DEPENDENCIES)
+    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
+
+    if(NOT B_SOURCE_DIR)
+        set(B_SOURCE_DIR source)
+    endif()
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    if(NOT B_INSTALL_DIR)
+        set(B_INSTALL_DIR install)
+    endif()
+
+    set(_dep_prefix_paths "")
+    if(B_DEPENDENCIES)
+        get_property(
+            _declared
+            DIRECTORY
+            PROPERTY SPM_RECIPE_DEPENDENCIES)
+        foreach(_dep ${B_DEPENDENCIES})
+            if(NOT _dep IN_LIST _declared)
+                spm_log_fatal("DEPENDENCIES entry '${_dep}' was not declared via spm_requires() in this recipe")
+            endif()
+            get_property(_dep_dir GLOBAL PROPERTY SPM_DEP_INSTALL_DIR_NAME_${_dep})
+            if(NOT _dep_dir)
+                spm_log_fatal("No install directory recorded for dependency '${_dep}'")
+            endif()
+            list(APPEND _dep_prefix_paths "${_dep_dir}")
+        endforeach()
+    endif()
+    if(CMAKE_PREFIX_PATH)
+        list(PREPEND _dep_prefix_paths ${CMAKE_PREFIX_PATH})
+    endif()
+
+    set(_prefix_path_arg "")
+    if(_dep_prefix_paths)
+        set(_prefix_cache_file "${CMAKE_CURRENT_SOURCE_DIR}/spm-prefix-path.cmake")
+        file(WRITE "${_prefix_cache_file}" "set(CMAKE_PREFIX_PATH \"")
+        set(_first TRUE)
+        foreach(_p ${_dep_prefix_paths})
+            if(NOT _first)
+                file(APPEND "${_prefix_cache_file}" ";")
+            endif()
+            file(APPEND "${_prefix_cache_file}" "${_p}")
+            set(_first FALSE)
+        endforeach()
+        file(APPEND "${_prefix_cache_file}" "\" CACHE STRING \"\" FORCE)\n")
+        set(_prefix_path_arg -C "${_prefix_cache_file}")
+    endif()
+
+    set(_args "")
+    list(APPEND _args "-DCMAKE_INSTALL_PREFIX=${B_INSTALL_DIR}")
+    list(APPEND _args "-DCMAKE_POSITION_INDEPENDENT_CODE=ON")
+
+    spm_execute_process(
+        COMMAND
+        ${CMAKE_COMMAND}
+        -S
+        ${B_SOURCE_DIR}
+        -B
+        ${B_BUILD_DIR}
+        -G
+        "${CMAKE_GENERATOR}"
+        -C
+        "spm-input.cmake"
+        ${_args}
+        ${_prefix_path_arg}
+        ${B_OPTIONS}
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _cfg_result
+        OUTPUT_VARIABLE
+        _cfg_output
+        ERROR_VARIABLE
+        _cfg_output)
+
+    if(NOT _cfg_result EQUAL 0)
+        spm_log_fatal("Configure failed:\n${_cfg_output}")
+    else()
+        spm_log_debug("Configure succeeded:\n${_cfg_output}")
+    endif()
+
+endfunction()
+
+# Build a configured cmake target
+# spm_cmake_build(
+#   [BUILD_DIR build]
+# )
+function(spm_cmake_build)
+    _spm_requires_git()
+
+    set(oneValArgs BUILD_DIR)
+    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
+
+    if(NOT B_BUILD_DIR)
+        set(B_BUILD_DIR build)
+    endif()
+
+    set(_build_target_args)
+
+    spm_execute_process(
+        COMMAND
+        ${CMAKE_COMMAND}
+        --build
+        ${B_BUILD_DIR}
+        --config
+        ${SPM_BUILD_TYPE}
+        --parallel
+        ${SPM_PARALLEL_JOBS}
+        --target
+        install
+        WORKING_DIRECTORY
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE
+        _build_result
+        OUTPUT_VARIABLE
+        _build_output
+        ERROR_VARIABLE
+        _build_output)
+    if(NOT _build_result EQUAL 0)
+        spm_log_fatal("Build failed target:\n${_build_output}")
+    endif()
+endfunction()
+
+# DOWNLOAD
 
 # Downloads a file, with header/auth support, hash verification, and retry.
 #
@@ -569,6 +1617,8 @@ function(spm_extract_archive)
     endif()
 endfunction()
 
+# PATCHING
+
 # Patches source
 # spm_apply_patch(
 #   PATCHES ...
@@ -623,146 +1673,72 @@ function(spm_apply_patch)
     endforeach()
 endfunction()
 
-# Configure a cmake target
-# spm_cmake_configure(
-#   [SOURCE_DIR source]
-#   [BUILD_DIR build]
-#   [INSTALL_DIR install]
-#   [OPTIONS ...]
-#   [DEPENDENCIES ...]
-# )
-function(spm_cmake_configure)
-    _spm_requires_git()
-
-    set(oneValArgs SOURCE_DIR BUILD_DIR INSTALL_DIR)
-    set(multiValArgs OPTIONS DEPENDENCIES)
-    cmake_parse_arguments(B "" "${oneValArgs}" "${multiValArgs}" ${ARGN})
-
-    if(NOT B_SOURCE_DIR)
-        set(B_SOURCE_DIR source)
-    endif()
-
-    if(NOT B_BUILD_DIR)
-        set(B_BUILD_DIR build)
-    endif()
-
-    if(NOT B_INSTALL_DIR)
-        set(B_INSTALL_DIR install)
-    endif()
-
-    set(_dep_prefix_paths "")
-    if(B_DEPENDENCIES)
-        get_property(
-            _declared
-            DIRECTORY
-            PROPERTY SPM_RECIPE_DEPENDENCIES)
-        foreach(_dep ${B_DEPENDENCIES})
-            if(NOT _dep IN_LIST _declared)
-                spm_log_fatal("DEPENDENCIES entry '${_dep}' was not declared via spm_requires() in this recipe")
-            endif()
-            get_property(_dep_dir GLOBAL PROPERTY SPM_DEP_INSTALL_DIR_NAME_${_dep})
-            if(NOT _dep_dir)
-                spm_log_fatal("No install directory recorded for dependency '${_dep}'")
-            endif()
-            list(APPEND _dep_prefix_paths "${_dep_dir}")
-        endforeach()
-    endif()
-    if(CMAKE_PREFIX_PATH)
-        list(PREPEND _dep_prefix_paths ${CMAKE_PREFIX_PATH})
-    endif()
-
-    set(_prefix_path_arg "")
-    if(_dep_prefix_paths)
-        set(_prefix_cache_file "${CMAKE_CURRENT_SOURCE_DIR}/spm-prefix-path.cmake")
-        file(WRITE "${_prefix_cache_file}" "set(CMAKE_PREFIX_PATH \"")
-        set(_first TRUE)
-        foreach(_p ${_dep_prefix_paths})
-            if(NOT _first)
-                file(APPEND "${_prefix_cache_file}" ";")
-            endif()
-            file(APPEND "${_prefix_cache_file}" "${_p}")
-            set(_first FALSE)
-        endforeach()
-        file(APPEND "${_prefix_cache_file}" "\" CACHE STRING \"\" FORCE)\n")
-        set(_prefix_path_arg -C "${_prefix_cache_file}")
-    endif()
-
-    set(_args "")
-    list(APPEND _args "-DCMAKE_INSTALL_PREFIX=${B_INSTALL_DIR}")
-
-    spm_execute_process(
-        COMMAND
-        ${CMAKE_COMMAND}
-        -S
-        ${B_SOURCE_DIR}
-        -B
-        ${B_BUILD_DIR}
-        -G
-        "${CMAKE_GENERATOR}"
-        -C
-        "spm-input.cmake"
-        ${_args}
-        ${_prefix_path_arg}
-        ${B_OPTIONS}
-        WORKING_DIRECTORY
-        "${CMAKE_CURRENT_SOURCE_DIR}"
-        RESULT_VARIABLE
-        _cfg_result
-        OUTPUT_VARIABLE
-        _cfg_output
-        ERROR_VARIABLE
-        _cfg_output)
-
-    if(NOT _cfg_result EQUAL 0)
-        spm_log_fatal("Configure failed:\n${_cfg_output}")
-    else()
-        spm_log_debug("Configure succeeded:\n${_cfg_output}")
-    endif()
-
-endfunction()
-
-# Build a configured cmake target
-# spm_cmake_build(
-#   [BUILD_DIR build]
-# )
-function(spm_cmake_build)
-    _spm_requires_git()
-
-    set(oneValArgs BUILD_DIR)
-    cmake_parse_arguments(B "" "${oneValArgs}" "" ${ARGN})
-
-    if(NOT B_BUILD_DIR)
-        set(B_BUILD_DIR build)
-    endif()
-
-    set(_build_target_args)
-
-    spm_execute_process(
-        COMMAND
-        ${CMAKE_COMMAND}
-        --build
-        ${B_BUILD_DIR}
-        --config
-        ${SPM_BUILD_TYPE}
-        --parallel
-        ${SPM_PARALLEL_JOBS}
-        --target
-        install
-        WORKING_DIRECTORY
-        "${CMAKE_CURRENT_SOURCE_DIR}"
-        RESULT_VARIABLE
-        _build_result
-        OUTPUT_VARIABLE
-        _build_output
-        ERROR_VARIABLE
-        _build_output)
-    if(NOT _build_result EQUAL 0)
-        spm_log_fatal("Build failed target:\n${_build_output}")
-    endif()
-endfunction()
-
 #
 #
+
+# Creates a target from a package install directory laid out as:
+#   .
+#   |_ include/
+#   |_ bin/
+#   |_ lib/
+#   |_ extra/
+#
+# spm_create_dummy_target(
+#   NAME <name>
+#   [OUT_TARGET_NAME <name>]
+#   [STATIC_LIBS <libs>...]
+# )
+function(spm_create_dummy_target)
+    set(_options "")
+    set(_one_value_args NAME OUT_TARGET_NAME)
+    set(_multi_value_args DEPENDENCIES)
+    cmake_parse_arguments(_sdt "${_options}" "${_one_value_args}" "${_multi_value_args}" ${ARGN})
+
+    if(NOT _sdt_NAME)
+        message(FATAL_ERROR "spm_create_dummy_target: NAME is required")
+    endif()
+
+    set(_sdt_target_name "${_sdt_NAME}_dummy")
+    set(SPM_IMPORT_NAME "${_sdt_NAME}")
+
+    if(NOT TARGET ${_sdt_target_name})
+        add_library(${_sdt_target_name} INTERFACE)
+
+        if(_sdt_DEPENDENCIES)
+            target_link_libraries(${_sdt_target_name} INTERFACE ${_sdt_DEPENDENCIES})
+        endif()
+    endif()
+
+    if(NOT TARGET ${_sdt_NAME}::${_sdt_NAME})
+        add_library(${_sdt_NAME}::${_sdt_NAME} ALIAS ${_sdt_target_name})
+    endif()
+
+    set(_config_dir "${CMAKE_CURRENT_BINARY_DIR}/${SPM_IMPORT_NAME}-dummy-config")
+    file(MAKE_DIRECTORY "${_config_dir}")
+
+    set(_config_file "${_config_dir}/${SPM_IMPORT_NAME}Config.cmake")
+    file(WRITE "${_config_file}"
+"# Auto-generated dummy config for ${SPM_IMPORT_NAME} (no build artifacts;
+# satisfied by the system or a no-op on this platform).
+if(NOT TARGET ${SPM_IMPORT_NAME}::${SPM_IMPORT_NAME})
+    add_library(${SPM_IMPORT_NAME}::${SPM_IMPORT_NAME} INTERFACE IMPORTED)
+")
+
+    if(_sdt_DEPENDENCIES)
+        file(APPEND "${_config_file}"
+"    set_target_properties(${SPM_IMPORT_NAME}::${SPM_IMPORT_NAME} PROPERTIES
+        INTERFACE_LINK_LIBRARIES \"${_sdt_DEPENDENCIES}\")
+")
+    endif()
+
+    file(APPEND "${_config_file}" "endif()\n")
+
+    install(DIRECTORY "${_config_dir}/" DESTINATION "lib/cmake/${SPM_IMPORT_NAME}")
+
+    if(_sdt_OUT_TARGET_NAME)
+        set(${_sdt_OUT_TARGET_NAME} ${_sdt_target_name})
+    endif()
+endfunction()
 
 # Creates a target from a package install directory laid out as:
 #   .

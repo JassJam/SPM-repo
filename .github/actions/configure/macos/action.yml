@@ -12,7 +12,7 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
-        brew install ninja
+        brew install ninja meson
 
     - name: Install dependencies (gcc)
       if: contains(inputs.arch, 'gcc')
