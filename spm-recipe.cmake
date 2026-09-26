@@ -41,6 +41,10 @@ find_program(MESON_EXECUTABLE NAMES meson)
 find_program(SPM_SH_EXECUTABLE NAMES sh bash)
 find_program(MAKE_EXECUTABLE NAMES make mingw32-make)
 
+if(MSVC AND EXISTS "/usr/bin/sh")
+    set(SPM_SH_EXECUTABLE "/usr/bin/sh")
+endif()
+
 macro(_spm_requires_autotools)
     if(NOT SPM_SH_EXECUTABLE)
         spm_log_fatal("no POSIX shell (sh/bash) was found; autotools recipes need one, e.g. via MSYS2 on Windows")
