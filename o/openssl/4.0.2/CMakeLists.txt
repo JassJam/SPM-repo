@@ -1,6 +1,11 @@
 include(${CMAKE_CURRENT_LIST_DIR}/spm-recipe.cmake)
 
-find_program(PERL_EXECUTABLE NAMES perl)
+if(WIN32)
+    find_program(PERL_EXECUTABLE NAMES perl PATHS "C:/Strawberry/perl/bin" "C:/Strawberry/c/bin" NO_DEFAULT_PATH)
+endif()
+if(NOT PERL_EXECUTABLE)
+    find_program(PERL_EXECUTABLE NAMES perl)
+endif()
 if(NOT PERL_EXECUTABLE)
     spm_log_fatal("openssl recipe requires perl on PATH")
 endif()

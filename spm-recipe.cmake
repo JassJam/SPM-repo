@@ -538,6 +538,39 @@ function(spm_autotools_configure)
 
     _spm_resolve_dependency_prefixes("${B_DEPENDENCIES}" _dep_prefixes)
 
+    set(_has_pic_opt FALSE)
+    foreach(_opt ${B_OPTIONS})
+        if(_opt MATCHES "pic")
+            set(_has_pic_opt TRUE)
+        endif()
+    endforeach()
+    if(NOT _has_pic_opt)
+        list(APPEND B_OPTIONS --with-pic)
+    endif()
+
+    if(MSVC)
+        spm_write_msvc_compile_wrapper(_msvc_compile_wrapper)
+        set(_has_cc_opt FALSE)
+        foreach(_opt ${B_OPTIONS})
+            if(_opt MATCHES "^CC=")
+                set(_has_cc_opt TRUE)
+            endif()
+        endforeach()
+        if(NOT _has_cc_opt)
+            list(APPEND B_OPTIONS
+                "CC=${_msvc_compile_wrapper} cl -nologo"
+                "CXX=${_msvc_compile_wrapper} cl -nologo -EHsc"
+                "CFLAGS=-MD"
+                "CXXFLAGS=-MD"
+                "LD=link"
+                "NM=dumpbin -symbols"
+                "AR=${_msvc_compile_wrapper} lib -nologo"
+                "RANLIB=:")
+        endif()
+    else()
+        list(APPEND B_OPTIONS "CFLAGS=-g -O2 -std=gnu17")
+    endif()
+
     string(SHA256 _stamp_key "${B_SOURCE_DIR}|${B_BUILD_DIR}|${B_INSTALL_DIR}|${B_OPTIONS}|${_dep_prefixes}")
     set(_stamp_file "${B_BUILD_DIR}/.spm-autotools-configured-${_stamp_key}")
     if(NOT SPM_FORCE_REBUILD)
@@ -565,18 +598,6 @@ function(spm_autotools_configure)
         endforeach()
     endforeach()
 
-    if(MSVC)
-        spm_write_msvc_compile_wrapper(_compile_wrapper)
-        list(APPEND _env_args "CC=${SPM_SH_EXECUTABLE} ${_compile_wrapper} ${CMAKE_C_COMPILER} -nologo")
-        if(CMAKE_CXX_COMPILER)
-            list(APPEND _env_args "CXX=${SPM_SH_EXECUTABLE} ${_compile_wrapper} ${CMAKE_CXX_COMPILER} -nologo")
-        endif()
-        list(APPEND _env_args "RANLIB=:")
-        if(EXISTS "${B_SOURCE_DIR}/build-aux/ar-lib")
-            list(APPEND _env_args "AR=${SPM_SH_EXECUTABLE} ${B_SOURCE_DIR}/build-aux/ar-lib lib")
-        endif()
-    endif()
-
     set(_env_args "")
     if(_cppflags)
         list(JOIN _cppflags " " _cppflags_str)
@@ -590,9 +611,6 @@ function(spm_autotools_configure)
         list(JOIN _pc_paths ":" _pc_paths_str)
         list(APPEND _env_args "PKG_CONFIG_PATH=${_pc_paths_str}")
     endif()
-    # if(NOT SPM_BUILD_SHARED_LIBS STREQUAL "" AND SPM_BUILD_SHARED_LIBS)
-    #     list(APPEND _env_args "CFLAGS=-fPIC")
-    # endif()
 
     if(NOT B_BUILD_DIR STREQUAL _abs_source_dir)
         file(MAKE_DIRECTORY "${B_BUILD_DIR}")
@@ -621,7 +639,12 @@ function(spm_autotools_configure)
         _cfg_output)
 
     if(NOT _cfg_result EQUAL 0)
-        spm_log_fatal("Configure failed:\n${_cfg_output}")
+        set(_config_log "${B_BUILD_DIR}/config.log")
+        set(_config_log_text "")
+        if(EXISTS "${_config_log}")
+            file(READ "${_config_log}" _config_log_text)
+        endif()
+        spm_log_fatal("Configure failed:\n${_cfg_output}\n\n--- config.log ---\n${_config_log_text}")
     else()
         spm_log_debug("Configure succeeded:\n${_cfg_output}")
     endif()

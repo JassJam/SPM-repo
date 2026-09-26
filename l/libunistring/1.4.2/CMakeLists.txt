@@ -27,8 +27,6 @@ if(SPM_LIBUNISTRING_PIC)
     list(APPEND _configure_opts "--with-pic")
 endif()
 
-list(APPEND _configure_opts "CFLAGS=-g -O2 -std=gnu17")
-
 spm_autotools_configure(OPTIONS ${_configure_opts} DEPENDENCIES libiconv::libiconv)
 
 spm_autotools_build()
