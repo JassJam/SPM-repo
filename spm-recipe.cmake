@@ -611,6 +611,11 @@ function(spm_autotools_configure)
         list(JOIN _pc_paths ":" _pc_paths_str)
         list(APPEND _env_args "PKG_CONFIG_PATH=${_pc_paths_str}")
     endif()
+    if(MSVC AND EXISTS "/usr/bin/sh")
+        # Keep configure-generated SHELL assignments free of spaces ("C:/Program Files/..."),
+        # otherwise Makefile rules that invoke $(SHELL) fail under /usr/bin/sh.
+        list(APPEND _env_args "CONFIG_SHELL=/usr/bin/sh" "SHELL=/usr/bin/sh")
+    endif()
     set(_restore_msvc_include FALSE)
     if(MSVC AND DEFINED ENV{INCLUDE} AND NOT "$ENV{INCLUDE}" STREQUAL "")
         set(_saved_msvc_include "$ENV{INCLUDE}")
