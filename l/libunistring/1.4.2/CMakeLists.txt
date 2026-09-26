@@ -27,7 +27,7 @@ if(SPM_LIBUNISTRING_PIC)
     list(APPEND _configure_opts "--with-pic")
 endif()
 
-if(MSVC)
+if(MSVC AND NOT _shared)
     list(APPEND _configure_opts "--disable-namespacing")
 endif()
 
