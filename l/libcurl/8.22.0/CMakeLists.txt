@@ -70,7 +70,7 @@ endif()
 if(SPM_CURL_WITH_LDAP)
     if(WIN32)
         spm_log_fatal(
-"SPM_CURL_WITH_LDAP is ON, but the openldap recipe has no Windows path (it requires a POSIX shell)")
+            "SPM_CURL_WITH_LDAP is ON, but the openldap recipe has no Windows path (it requires a POSIX shell)")
     endif()
     spm_requires(NAME openldap VERSION 2.7.1)
     list(APPEND _curl_deps openldap::openldap)
@@ -89,28 +89,37 @@ endif()
 
 spm_cmake_configure(
     OPTIONS
-"-DBUILD_SHARED_LIBS=${_shared}"
+    "-DBUILD_SHARED_LIBS=${_shared}"
     -DBUILD_CURL_EXE=OFF
     -DBUILD_TESTING=OFF
     -DBUILD_LIBCURL_DOCS=OFF
-"-DCURL_USE_OPENSSL=${CURL_USE_OPENSSL}"
-"-DCURL_USE_MBEDTLS=${CURL_USE_MBEDTLS}"
-"-DENABLE_ARES=${ENABLE_ARES}"
-"-DCURL_USE_LIBSSH2=${CURL_USE_LIBSSH2}"
-"-DUSE_NGHTTP2=${USE_NGHTTP2}"
-"-DCURL_ZLIB=${CURL_ZLIB}"
-"-DCURL_ZSTD=${CURL_ZSTD}"
-"-DCURL_BROTLI=${CURL_BROTLI}"
-"-DUSE_LIBIDN2=${USE_LIBIDN2}"
-"-DCURL_USE_LIBPSL=${CURL_USE_LIBPSL}"
+    "-DCURL_USE_OPENSSL=${CURL_USE_OPENSSL}"
+    "-DCURL_USE_MBEDTLS=${CURL_USE_MBEDTLS}"
+    "-DENABLE_ARES=${ENABLE_ARES}"
+    "-DCURL_USE_LIBSSH2=${CURL_USE_LIBSSH2}"
+    "-DUSE_NGHTTP2=${USE_NGHTTP2}"
+    "-DCURL_ZLIB=${CURL_ZLIB}"
+    "-DCURL_ZSTD=${CURL_ZSTD}"
+    "-DCURL_BROTLI=${CURL_BROTLI}"
+    "-DUSE_LIBIDN2=${USE_LIBIDN2}"
+    "-DCURL_USE_LIBPSL=${CURL_USE_LIBPSL}"
     ${_ldap_disable_flag}
     DEPENDENCIES
-${_curl_deps})
+    ${_curl_deps})
 
 spm_cmake_build()
 
 spm_create_target(NAME libcurl OUT_TARGET_NAME _curl_target DEPENDENCIES ${_curl_deps})
 
 if(WIN32)
-    target_link_libraries(${_curl_target} INTERFACE ws2_32 crypt32 advapi32 wldap32 winmm iphlpapi bcrypt secur32)
+    target_link_libraries(
+        ${_curl_target}
+        INTERFACE ws2_32
+                  crypt32
+                  advapi32
+                  wldap32
+                  winmm
+                  iphlpapi
+                  bcrypt
+                  secur32)
 endif()

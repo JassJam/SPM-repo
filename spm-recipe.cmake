@@ -565,6 +565,18 @@ function(spm_autotools_configure)
         endforeach()
     endforeach()
 
+    if(MSVC)
+        spm_write_msvc_compile_wrapper(_compile_wrapper)
+        list(APPEND _env_args "CC=${SPM_SH_EXECUTABLE} ${_compile_wrapper} ${CMAKE_C_COMPILER} -nologo")
+        if(CMAKE_CXX_COMPILER)
+            list(APPEND _env_args "CXX=${SPM_SH_EXECUTABLE} ${_compile_wrapper} ${CMAKE_CXX_COMPILER} -nologo")
+        endif()
+        list(APPEND _env_args "RANLIB=:")
+        if(EXISTS "${B_SOURCE_DIR}/build-aux/ar-lib")
+            list(APPEND _env_args "AR=${SPM_SH_EXECUTABLE} ${B_SOURCE_DIR}/build-aux/ar-lib lib")
+        endif()
+    endif()
+
     set(_env_args "")
     if(_cppflags)
         list(JOIN _cppflags " " _cppflags_str)
@@ -578,6 +590,9 @@ function(spm_autotools_configure)
         list(JOIN _pc_paths ":" _pc_paths_str)
         list(APPEND _env_args "PKG_CONFIG_PATH=${_pc_paths_str}")
     endif()
+    # if(NOT SPM_BUILD_SHARED_LIBS STREQUAL "" AND SPM_BUILD_SHARED_LIBS)
+    #     list(APPEND _env_args "CFLAGS=-fPIC")
+    # endif()
 
     if(NOT B_BUILD_DIR STREQUAL _abs_source_dir)
         file(MAKE_DIRECTORY "${B_BUILD_DIR}")
@@ -1253,6 +1268,7 @@ function(spm_cmake_configure)
 
     set(_args "")
     list(APPEND _args "-DCMAKE_INSTALL_PREFIX=${B_INSTALL_DIR}")
+    list(APPEND _args "-DCMAKE_POSITION_INDEPENDENT_CODE=ON")
 
     spm_execute_process(
         COMMAND
