@@ -614,7 +614,7 @@ function(spm_autotools_configure)
     if(MSVC AND DEFINED ENV{INCLUDE} AND NOT "$ENV{INCLUDE}" STREQUAL "")
         set(_msvc_include "$ENV{INCLUDE}")
         string(REPLACE "\\" "/" _msvc_include "${_msvc_include}")
-        string(REPLACE ";" "\\;" _msvc_include "${_msvc_include}")
+        string(REPLACE ";" "\\\\;" _msvc_include "${_msvc_include}")
         list(APPEND _env_args "INCLUDE=${_msvc_include}")
     endif()
 
