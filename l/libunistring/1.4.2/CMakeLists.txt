@@ -27,6 +27,10 @@ if(SPM_LIBUNISTRING_PIC)
     list(APPEND _configure_opts "--with-pic")
 endif()
 
+if(MSVC)
+    list(APPEND _configure_opts "--disable-namespacing")
+endif()
+
 spm_autotools_configure(OPTIONS ${_configure_opts} DEPENDENCIES libiconv::libiconv)
 
 spm_autotools_build()
