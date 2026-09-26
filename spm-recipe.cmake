@@ -1074,11 +1074,15 @@ function(spm_autotools_build)
         endif()
     endif()
 
+    set(_make_args "-j" "${SPM_PARALLEL_JOBS}")
+    if(MSVC AND EXISTS "/usr/bin/sh")
+        list(APPEND _make_args "SHELL=/usr/bin/sh" "CONFIG_SHELL=/usr/bin/sh")
+    endif()
+
     spm_execute_process(
         COMMAND
         ${MAKE_EXECUTABLE}
-        -j
-        ${SPM_PARALLEL_JOBS}
+        ${_make_args}
         WORKING_DIRECTORY
         "${B_BUILD_DIR}"
         RESULT_VARIABLE
@@ -1094,6 +1098,7 @@ function(spm_autotools_build)
     spm_execute_process(
         COMMAND
         ${MAKE_EXECUTABLE}
+        ${_make_args}
         install
         WORKING_DIRECTORY
         "${B_BUILD_DIR}"
