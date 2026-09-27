@@ -41,7 +41,17 @@ find_program(MESON_EXECUTABLE NAMES meson)
 find_program(SPM_SH_EXECUTABLE NAMES sh bash)
 find_program(MAKE_EXECUTABLE NAMES make mingw32-make)
 
-if(MSVC AND EXISTS "/usr/bin/sh")
+if(MSVC)
+    if(EXISTS "/usr/bin/sh")
+        set(_spm_msvc_sh "/usr/bin/sh")
+    elseif(SPM_SH_EXECUTABLE MATCHES [[[/\\]usr[/\\]bin[/\\]sh(\.exe)?$]])
+        # Git-for-Windows often resolves to C:/Program Files/.../usr/bin/sh.exe;
+        # use the POSIX alias to avoid unquoted-space breakage in autotools output.
+        set(_spm_msvc_sh "/usr/bin/sh")
+    endif()
+endif()
+
+if(DEFINED _spm_msvc_sh)
     set(SPM_SH_EXECUTABLE "/usr/bin/sh")
 endif()
 
@@ -615,7 +625,7 @@ function(spm_autotools_configure)
         list(JOIN _pc_paths ":" _pc_paths_str)
         list(APPEND _env_args "PKG_CONFIG_PATH=${_pc_paths_str}")
     endif()
-    if(MSVC AND EXISTS "/usr/bin/sh")
+    if(MSVC AND SPM_SH_EXECUTABLE STREQUAL "/usr/bin/sh")
         # Keep configure-generated SHELL assignments free of spaces ("C:/Program Files/..."),
         # otherwise Makefile rules that invoke $(SHELL) fail under /usr/bin/sh.
         list(APPEND _env_args "CONFIG_SHELL=/usr/bin/sh" "SHELL=/usr/bin/sh")
@@ -1075,7 +1085,7 @@ function(spm_autotools_build)
     endif()
 
     set(_make_args "-j" "${SPM_PARALLEL_JOBS}")
-    if(MSVC AND EXISTS "/usr/bin/sh")
+    if(MSVC AND SPM_SH_EXECUTABLE STREQUAL "/usr/bin/sh")
         list(APPEND _make_args "SHELL=/usr/bin/sh" "CONFIG_SHELL=/usr/bin/sh" "MAKESHELL=/usr/bin/sh")
     endif()
 
