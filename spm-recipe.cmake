@@ -1076,7 +1076,7 @@ function(spm_autotools_build)
 
     set(_make_args "-j" "${SPM_PARALLEL_JOBS}")
     if(MSVC AND EXISTS "/usr/bin/sh")
-        list(APPEND _make_args "SHELL=/usr/bin/sh" "CONFIG_SHELL=/usr/bin/sh")
+        list(APPEND _make_args "SHELL=/usr/bin/sh" "CONFIG_SHELL=/usr/bin/sh" "MAKESHELL=/usr/bin/sh")
     endif()
 
     spm_execute_process(
