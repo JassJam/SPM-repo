@@ -1,0 +1,13 @@
+diff --git a/lib/CMakeLists.txt b/lib/CMakeLists.txt
+index 3b6a4400..ba8ebdaa 100644
+--- a/lib/CMakeLists.txt
++++ b/lib/CMakeLists.txt
+@@ -32,7 +32,7 @@ set(NGHTTP2_SOURCES
+ 
+ set(NGHTTP2_RES "")
+ set(STATIC_LIB "nghttp2_static")
+-set(SHARED_LIB "nghttp2")
++set(SHARED_LIB "nghttp2_shared")
+ 
+ if(BUILD_SHARED_LIBS AND BUILD_STATIC_LIBS AND MSVC AND NOT STATIC_LIB_SUFFIX)
+   set(STATIC_LIB_SUFFIX "_static")
