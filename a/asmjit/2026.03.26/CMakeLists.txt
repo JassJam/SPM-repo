@@ -6,13 +6,16 @@ spm_git_clone(
 )
 
 set(_shared_build "OFF")
+set(_asmjit_static "ON")
 if(SPM_BUILD_SHARED_LIBS)
 	set(_shared_build "ON")
+	set(_asmjit_static "OFF")
 endif()
 
 spm_cmake_configure(
 	OPTIONS
 	"-DBUILD_SHARED_LIBS=${_shared_build}"
+	"-DASMJIT_STATIC=${_asmjit_static}"
 )
 spm_cmake_build()
 
