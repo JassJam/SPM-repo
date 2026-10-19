@@ -21,4 +21,8 @@ spm_cmake_build()
 
 spm_create_target(
     NAME asmjit
+    OUT_TARGET_NAME _target_name
 )
+if(_asmjit_static)
+	target_compile_definitions(${_target_name} INTERFACE ASMJIT_STATIC)
+endif()
