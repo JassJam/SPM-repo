@@ -1,7 +1,6 @@
-# when:
-#  - event: tag
 when:
-  - event: pull_request
+  - event: tag
+
 steps:
   - name: publish-spm
     image: alpine:3.20
