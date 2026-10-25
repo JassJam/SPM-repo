@@ -1,0 +1,13 @@
+when:
+  - event: tag
+
+steps:
+  - name: publish-spm
+    image: alpine:3.20
+    environment:
+      SPM_FILES: spm.cmake spm-recipe.cmake spm-yaml.cmake
+      FORGE_TOKEN:
+        from_secret: FORGEJO_PUBLISH_TOKEN
+    commands:
+      - apk add --no-cache git curl jq coreutils
+      - sh ./.woodpecker/scripts/publish-files.sh
