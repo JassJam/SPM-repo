@@ -67,10 +67,12 @@ macro(_spm_yaml_flush_sublist)
                 set(_sub_list_joined "${_sub_item}")
                 set(_sub_list_first FALSE)
             else()
-                set(_sub_list_joined "${_sub_list_joined}${_SPM_YAML_SUBLIST_SEP}${_sub_item}")
+                set(_sub_list_joined
+                    "${_sub_list_joined}${_SPM_YAML_SUBLIST_SEP}${_sub_item}")
             endif()
         endforeach()
-        list(APPEND _item_args ${_sub_list_parent_key} "${_sub_list_key}=${_sub_list_joined}")
+        list(APPEND _item_args ${_sub_list_parent_key}
+             "${_sub_list_key}=${_sub_list_joined}")
         set(_sub_list_active FALSE)
         set(_sub_list_key "")
         set(_sub_list_parent_key "")
@@ -89,7 +91,8 @@ function(spm_require_packages_from_yaml)
         spm_log_fatal("spm_require_packages_from_yaml() requires FILE")
     endif()
     if(NOT EXISTS "${Y_FILE}")
-        spm_log_fatal("spm_require_packages_from_yaml(): '${Y_FILE}' does not exist")
+        spm_log_fatal(
+            "spm_require_packages_from_yaml(): '${Y_FILE}' does not exist")
     endif()
 
     file(STRINGS "${Y_FILE}" _lines ENCODING UTF-8)
@@ -115,7 +118,8 @@ function(spm_require_packages_from_yaml)
         string(LENGTH "${_leading_ws}" _line_indent)
 
         if(_sub_list_active)
-            if(_line_indent GREATER _sub_list_indent AND _line MATCHES "^ *- +(.+)$")
+            if(_line_indent GREATER _sub_list_indent AND _line MATCHES
+                                                         "^ *- +(.+)$")
                 _spm_yaml_strip_quotes("${CMAKE_MATCH_1}" _sub_val)
                 list(APPEND _sub_list_values "${_sub_val}")
                 continue()
@@ -124,7 +128,7 @@ function(spm_require_packages_from_yaml)
             endif()
         endif()
 
-        # --- dash + "key: value", starts a new item or list
+        # --- dash + "key: value", starts a new item, or list
         if(_line MATCHES "^( *)- +([A-Za-z_][A-Za-z0-9_]*):( +(.+))?$")
             string(LENGTH "${CMAKE_MATCH_1}" _indent)
             set(_key "${CMAKE_MATCH_2}")
@@ -140,7 +144,8 @@ function(spm_require_packages_from_yaml)
                     continue()
                 endif()
                 spm_log_fatal(
-                    "spm_require_packages_from_yaml(): nested list-of-maps is not supported (line: '${_line}')")
+                    "spm_require_packages_from_yaml(): nested list-of-maps is not supported (line: '${_line}')"
+                )
             endif()
 
             # new item: flush the previous one
@@ -164,11 +169,14 @@ function(spm_require_packages_from_yaml)
             set(_val "${CMAKE_MATCH_2}")
 
             if(NOT _pending_list_key)
-                spm_log_fatal("spm_require_packages_from_yaml(): '- ${_val}' found with no open array key above it")
+                spm_log_fatal(
+                    "spm_require_packages_from_yaml(): '- ${_val}' found with no open array key above it"
+                )
             endif()
             if(NOT _have_item OR _indent LESS_EQUAL _item_indent)
                 spm_log_fatal(
-                    "spm_require_packages_from_yaml(): array entry '- ${_val}' is not indented deeper than its item")
+                    "spm_require_packages_from_yaml(): array entry '- ${_val}' is not indented deeper than its item"
+                )
             endif()
 
             _spm_yaml_strip_quotes("${_val}" _val)
@@ -183,7 +191,9 @@ function(spm_require_packages_from_yaml)
                 continue() # top-level wrapper key, nothing to record
             endif()
             if(NOT _have_item)
-                spm_log_fatal("spm_require_packages_from_yaml(): key '${_key}' found before any '- name: ...' entry")
+                spm_log_fatal(
+                    "spm_require_packages_from_yaml(): key '${_key}' found before any '- name: ...' entry"
+                )
             endif()
 
             set(_pending_list_key "")

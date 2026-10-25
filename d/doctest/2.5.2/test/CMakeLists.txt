@@ -1,0 +1,3 @@
+add_executable(main main.cpp)
+target_link_libraries(main doctest::doctest)
+target_compile_definitions(main PRIVATE DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN)
