@@ -44,7 +44,7 @@ if [ "$SPM_DRY_RUN" = "true" ]; then
     # shellcheck disable=SC2086
     "${SPM_CHECKSUM}sum" $SPM_FILES
   fi
-  exit 0
+ # exit 0
 fi
 
 RID=$(curl -s -H "$AUTH" "$API/releases/tags/$CI_COMMIT_TAG" | jq -r '.id // empty')
