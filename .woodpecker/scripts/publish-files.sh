@@ -10,11 +10,6 @@ set -eu
 API="$FORGE_URL/api/v1/repos/$FORGE_REPO"
 AUTH="Authorization: token $FORGE_TOKEN"
 
-if [ -z "${CI_COMMIT_TAG:-}" ]; then
-  CI_COMMIT_TAG="test-$(printf %s "$CI_COMMIT_SHA" | cut -c1-8)"
-  echo "Not a tag event, using test tag: $CI_COMMIT_TAG"
-fi
-
 for f in $SPM_FILES; do
   [ -f "$f" ] || { echo "MISSING: $f"; exit 1; }
 done
