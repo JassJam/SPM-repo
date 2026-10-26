@@ -42,7 +42,21 @@ if [ "$SPM_CHECKSUM" != "none" ]; then
 fi
 
 for f in $UPLOAD; do
-  echo "Uploading $f"
-  curl -sf -X POST -H "$AUTH" -F "attachment=@$f" \
-    "$API/releases/$RID/assets?name=$(basename "$f")"
+  name=$(basename "$f")
+
+  OLD=$(curl -s -H "$AUTH" "$API/releases/$RID/assets" \
+    | jq -r --arg n "$name" '.[]? | select(.name == $n) | .id')
+  for id in $OLD; do
+    echo "Deleting existing asset $name ($id)"
+    curl -s -o /dev/null -X DELETE -H "$AUTH" "$API/releases/$RID/assets/$id"
+  done
+
+  echo "Uploading $name"
+  code=$(curl -s -o /tmp/resp.json -w '%{http_code}' -X POST -H "$AUTH" \
+    -F "attachment=@$f" "$API/releases/$RID/assets?name=$name")
+  if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+    echo "Upload of $name failed: HTTP $code"
+    cat /tmp/resp.json; echo
+    exit 1
+  fi
 done
