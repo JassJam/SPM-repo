@@ -1,5 +1,5 @@
 when:
-  - event: tag
+  - event: [tag, pull_request, manual]
 
 steps:
   - name: publish-spm
