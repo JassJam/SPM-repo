@@ -4,9 +4,6 @@ set -eu
 #!/bin/sh
 set -eu
 
-API="$FORGE_URL/api/v1/repos/$FORGE_REPO"
-AUTH="Authorization: token $FORGE_TOKEN"
-
 : "${SPM_FILES:?SPM_FILES is required}"
 : "${FORGE_TOKEN:?FORGE_TOKEN is required}"
 : "${SPM_CHECKSUM:=sha256}"
@@ -14,6 +11,9 @@ AUTH="Authorization: token $FORGE_TOKEN"
 : "${SPM_DRY_RUN:=false}"
 : "${FORGE_URL:=$CI_FORGE_URL}"
 : "${FORGE_REPO:=$CI_REPO}"
+
+API="$FORGE_URL/api/v1/repos/$FORGE_REPO"
+AUTH="Authorization: token $FORGE_TOKEN"
 
 if [ -z "${CI_COMMIT_TAG:-}" ]; then
   CI_COMMIT_TAG="test-$(printf %s "$CI_COMMIT_SHA" | cut -c1-8)"
