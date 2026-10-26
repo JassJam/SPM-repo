@@ -4,24 +4,16 @@ set -eu
 : "${SPM_FILES:?SPM_FILES is required}"
 : "${FORGE_TOKEN:?FORGE_TOKEN is required}"
 : "${SPM_CHECKSUM:=sha256}"
-: "${SPM_DRY_RUN:=auto}"
 : "${FORGE_URL:=$CI_FORGE_URL}"
 : "${FORGE_REPO:=$CI_REPO}"
 
 API="$FORGE_URL/api/v1/repos/$FORGE_REPO"
 AUTH="Authorization: token $FORGE_TOKEN"
 
-TARGET=""
 if [ -z "${CI_COMMIT_TAG:-}" ]; then
   CI_COMMIT_TAG="test-$(printf %s "$CI_COMMIT_SHA" | cut -c1-8)"
   echo "Not a tag event, using test tag: $CI_COMMIT_TAG"
-  [ "$SPM_DRY_RUN" = "auto" ] && SPM_DRY_RUN=true
-  TARGET=",\"target_commitish\":\"${CI_REPO_DEFAULT_BRANCH:-main}\""
 fi
-[ "$SPM_DRY_RUN" = "auto" ] && SPM_DRY_RUN=false
-
-git config --global --add safe.directory "$CI_WORKSPACE"
-git fetch --tags --force --unshallow 2>/dev/null || git fetch --tags --force
 
 for f in $SPM_FILES; do
   [ -f "$f" ] || { echo "MISSING: $f"; exit 1; }
@@ -35,19 +27,13 @@ if [ "$SPM_CHECKSUM" != "none" ]; then
   cat "spm.$SPM_CHECKSUM"
 fi
 
-if [ "$SPM_DRY_RUN" = "true" ]; then
-  echo "DRY RUN: would publish to release $CI_COMMIT_TAG:"
-  for f in $UPLOAD; do echo "  $(basename "$f")"; done
-#  exit 0
-fi
-
 RID=$(curl -s -H "$AUTH" "$API/releases/tags/$CI_COMMIT_TAG" | jq -r '.id? // empty')
 
 if [ -z "$RID" ]; then
   echo "Creating release $CI_COMMIT_TAG"
   code=$(curl -s -o /tmp/release.json -w '%{http_code}' -X POST \
     -H "$AUTH" -H "Content-Type: application/json" \
-    -d "{\"tag_name\":\"$CI_COMMIT_TAG\",\"name\":\"$CI_COMMIT_TAG\"$TARGET}" \
+    -d "{\"tag_name\":\"$CI_COMMIT_TAG\",\"name\":\"$CI_COMMIT_TAG\"}" \
     "$API/releases")
   if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
     echo "Release creation failed: HTTP $code"
