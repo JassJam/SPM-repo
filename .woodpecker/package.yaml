@@ -2,6 +2,12 @@ when:
   - event: tag
 
 steps:
+  package-spm:
+    image: alpine:3.20
+    commands:
+      - mkdir -p dist
+      - tar -czf dist/spm-release.tar.gz spm.cmake spm-recipe.cmake spm-yaml.cmake
+
   publish-spm:
     image: woodpeckerci/plugin-release
     settings:
@@ -9,9 +15,7 @@ steps:
       api-key:
         from_secret: FORGEJO_PUBLISH_TOKEN
       files:
-        - spm.cmake
-        - spm-recipe.cmake
-        - spm-yaml.cmake
+        - dist/spm-release.tar.gz
       checksum: sha256
       file-exists: overwrite
       title: ${CI_COMMIT_TAG}
