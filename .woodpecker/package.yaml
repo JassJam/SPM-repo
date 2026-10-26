@@ -7,6 +7,8 @@ steps:
     commands:
       - mkdir -p dist
       - tar -czf dist/spm-release.tar.gz spm.cmake spm-recipe.cmake spm-yaml.cmake
+      - HASH=$(sha256sum dist/spm-release.tar.gz | cut -d' ' -f1)
+      - sed -e "s|@SPM_TAG@|$CI_COMMIT_TAG|g" -e "s|@SPM_HASH@|$HASH|g" spm-bootstrap.cmake.in > dist/spm-bootstrap.cmake
 
   publish-spm:
     image: woodpeckerci/plugin-release
@@ -16,7 +18,7 @@ steps:
         from_secret: FORGEJO_PUBLISH_TOKEN
       files:
         - dist/spm-release.tar.gz
+        - dist/spm-bootstrap.cmake
       checksum: sha256
       file-exists: overwrite
       title: ${CI_COMMIT_TAG}
-      target: ${CI_COMMIT_SHA}
