@@ -1,9 +1,6 @@
 #!/bin/sh
 set -eu
 
-#!/bin/sh
-set -eu
-
 : "${SPM_FILES:?SPM_FILES is required}"
 : "${FORGE_TOKEN:?FORGE_TOKEN is required}"
 : "${SPM_CHECKSUM:=sha256}"
@@ -50,12 +47,24 @@ if [ "$SPM_DRY_RUN" = "true" ]; then
  # exit 0
 fi
 
-RID=$(curl -s -H "$AUTH" "$API/releases/tags/$CI_COMMIT_TAG" | jq -r '.id // empty')
+RID=$(curl -s -H "$AUTH" "$API/releases/tags/$CI_COMMIT_TAG" | jq -r '.id? // empty')
+
 if [ -z "$RID" ]; then
-  RID=$(curl -sf -X POST -H "$AUTH" -H "Content-Type: application/json" \
-    -d "{\"tag_name\":\"$CI_COMMIT_TAG\",\"name\":\"$CI_COMMIT_TAG\"}" \
-    "$API/releases" | jq -r '.id')
+  echo "Creating release $CI_COMMIT_TAG"
+  code=$(curl -s -o /tmp/release.json -w '%{http_code}' -X POST \
+    -H "$AUTH" -H "Content-Type: application/json" \
+    -d "{\"tag_name\":\"$CI_COMMIT_TAG\",\"name\":\"$CI_COMMIT_TAG\",\"target_commitish\":\"$CI_COMMIT_SHA\"}" \
+    "$API/releases")
+  if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+    echo "Release creation failed: HTTP $code"
+    cat /tmp/release.json; echo
+    exit 1
+  fi
+  RID=$(jq -r '.id' /tmp/release.json)
 fi
+
+[ -n "$RID" ] && [ "$RID" != "null" ] || { echo "No release id"; exit 1; }
+echo "Using release id $RID"
 
 UPLOAD="$SPM_FILES"
 if [ "$SPM_CHECKSUM" != "none" ]; then
