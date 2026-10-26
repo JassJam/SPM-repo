@@ -1,13 +1,25 @@
 when:
   - event: tag
 
+variables:
+  - &release_plugin 'woodpeckerci/plugin-release'
+  - &forge_url 'https://codeberg.org'
+  - &spm_files
+    - spm.cmake
+    - spm-recipe.cmake
+    - spm-yaml.cmake
+
 steps:
-  - name: publish-spm
-    image: alpine:3.20
-    environment:
-      SPM_FILES: spm.cmake spm-recipe.cmake spm-yaml.cmake
-      FORGE_TOKEN:
+  publish:
+    image: *release_plugin
+    settings:
+      base-url:
+        from_secret: FORGEJO_PUBLISH_URL
+      api-key:
         from_secret: FORGEJO_PUBLISH_TOKEN
-    commands:
-      - apk add --no-cache git curl jq coreutils
-      - sh ./.woodpecker/scripts/publish-files.sh
+      files: *spm_files
+      checksum: sha256
+      title: ${CI_COMMIT_TAG}
+      overwrite: true
+    when:
+      - event: tag
