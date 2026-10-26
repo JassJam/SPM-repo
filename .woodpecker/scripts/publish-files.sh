@@ -52,7 +52,7 @@ fi
 if [ "$SPM_DRY_RUN" = "true" ]; then
   echo "DRY RUN: would publish to release $CI_COMMIT_TAG:"
   for f in $UPLOAD; do echo "  $(basename "$f")"; done
-  exit 0
+#  exit 0
 fi
 
 RID=$(curl -s -H "$AUTH" "$API/releases/tags/$CI_COMMIT_TAG" | jq -r '.id? // empty')
